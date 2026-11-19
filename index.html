@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Hook, Line &amp; Sinker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ DOCK ============ -->
+<section id="dock" class="screen">
+  <header class="dock-hero">
+    <div class="hero-sky"></div>
+    <div class="hero-title">
+      <h1>🎣 Hook, Line &amp; Sinker</h1>
+      <p id="dockGreeting">Welcome to Saltwater Dock!</p>
+    </div>
+    <div class="coins big" id="dockCoins">🪙 100</div>
+    <div class="hero-planks"></div>
+  </header>
+
+  <main class="dock-main">
+    <div class="col">
+      <div class="card market">
+        <h2>🐟 Fish Market</h2>
+        <div id="marketList"></div>
+        <button id="sellBtn" class="btn green">Sell Fillets</button>
+      </div>
+
+      <div class="card">
+        <h2>⚓ Set Sail</h2>
+        <p id="sailNote" class="muted"></p>
+        <button id="sailBtn" class="btn blue huge">Head out to the ocean ⛵</button>
+      </div>
+
+      <div class="card">
+        <h2>📖 Fish Guide</h2>
+        <div id="fishGuide" class="guide"></div>
+      </div>
+    </div>
+
+    <div class="col wide">
+      <div class="card">
+        <h2 id="shopTitle">🛒 Bait &amp; Tackle Shop</h2>
+        <div id="shop" class="shop"></div>
+      </div>
+      <button id="resetBtn" class="btn tiny ghost">Start a new game</button>
+    </div>
+  </main>
+</section>
+
+<!-- ============ SEA ============ -->
+<section id="sea" class="screen hidden">
+  <div class="hud">
+    <div class="coins" id="seaCoins">🪙 0</div>
+    <div class="pill" id="bucketPill">🪣 0/4</div>
+    <div class="pill gear" id="gearPill"></div>
+    <div class="spacer"></div>
+    <button id="reelBtn" class="btn yellow hidden">Reel in 🎣</button>
+    <button id="filletBtn" class="btn red hidden">Fillet fish 🔪</button>
+    <button id="dockBtn" class="btn blue">Back to dock ⚓</button>
+  </div>
+  <div class="stage">
+    <canvas id="game" width="960" height="760"></canvas>
+    <div class="walk-pad">
+      <button class="walk" id="walkL">◀</button>
+      <button class="walk" id="walkR">▶</button>
+    </div>
+  </div>
+  <p class="hint" id="hint">Walk to the <b>left side</b> of the boat to fish. Click the water to drop your lure, then move the mouse to steer it into fish. Walk to the <b>right side</b> to fillet.</p>
+</section>
+
+<!-- ============ FILLET ============ -->
+<div id="fillet" class="overlay hidden">
+  <div class="panel">
+    <h2>🔪 Fillet Station</h2>
+    <p class="muted" id="filletSub">Tap the fish to chop it into fillets!</p>
+    <canvas id="filletCanvas" width="420" height="200"></canvas>
+    <div id="filletInfo" class="fillet-info"></div>
+    <div class="progress"><div id="filletBar"></div></div>
+    <div class="row">
+      <button id="chopBtn" class="btn red huge">Chop! 🔪</button>
+      <button id="filletClose" class="btn ghost">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="game.js"></script>
+</body>
+</html>
