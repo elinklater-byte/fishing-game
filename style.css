@@ -132,6 +132,39 @@ body {
 .row { display: flex; gap: 10px; }
 .row .btn.ghost { flex: 0 0 auto; }
 
+/* ---------- places, trophies, leaderboard ---------- */
+.small-label { margin: 0 0 6px; }
+.env-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.env-btn { font: inherit; border: 3px solid transparent; border-radius: 12px; padding: 8px 6px; cursor: pointer; text-align: center; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 44px; }
+.env-btn .eicon { font-size: 26px; }
+.env-btn small { font-size: 11px; line-height: 1.2; opacity: .9; }
+.env-btn.on { border-color: #ffd34d; box-shadow: 0 0 0 3px rgba(255,211,77,.35); }
+.env-ocean { background: linear-gradient(#3f9fdc, #145189); }
+.env-arctic { background: linear-gradient(#8fc6dc, #2b6c8f); }
+.env-swamp { background: linear-gradient(#7d8b45, #2f3a1f); }
+.trophies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.trophy { background: #f1ece2; border-radius: 12px; padding: 6px; text-align: center; font-size: 12px; }
+.trophy canvas { width: 100%; height: auto; aspect-ratio: 200 / 80; }
+.trophy b { display: block; font-size: 13px; }
+.trophy small { color: #5d6b78; }
+.trophy.won { background: linear-gradient(#fff6cf, #f6e3a1); box-shadow: inset 0 0 0 2px #d9b44a; }
+.lb-user p { margin: 4px 0 10px; }
+.lb-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.lb-form input { flex: 1 1 180px; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 2px solid #c99b62; min-height: 44px; }
+.lb-form input:focus { outline: 3px solid #2a74c9; outline-offset: 1px; }
+.lb-msg { color: #b3261e; font-weight: 700; margin: 6px 0 0; }
+.linkish { font: inherit; background: none; border: none; color: #2a74c9; text-decoration: underline; cursor: pointer; padding: 4px; }
+.lb-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.lb-tab { font: inherit; font-size: 14px; font-weight: 700; border: 2px solid #c99b62; background: #fff; border-radius: 999px; padding: 7px 12px; cursor: pointer; min-height: 38px; }
+.lb-tab.on { background: #2a74c9; border-color: #2a74c9; color: #fff; }
+.lb-tab.refresh { margin-left: auto; }
+.lb-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 6px; border-bottom: 1px dashed #d7c19d; }
+.lb-row .rank { font-size: 18px; text-align: center; }
+.lb-row .who { overflow-wrap: anywhere; }
+.lb-row .val { white-space: nowrap; }
+.lb-row.me { background: #eef7ff; border-radius: 8px; }
+.lb-gap { text-align: center; color: #8a7556; }
+
 /* ---------- market supplies ---------- */
 .supplies { margin-top: 14px; border-top: 2px dashed #d7c19d; padding-top: 10px; }
 .supplies h3 { margin: 0 0 8px; font-size: 17px; }

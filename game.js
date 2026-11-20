@@ -6,69 +6,17 @@
 // ======================================================================
 const W = 960, H = 760, SURF = 130;          // view size and water line
 const PX_PER_M = 10;                          // 10px of depth = 1 metre
-const SEA_DEPTH = 2500;                       // sea floor is 250 m down
+const SEA_DEPTH = 5000;                       // sea floor is 500 m down
 const WORLD_H = SURF + SEA_DEPTH;
 const WRECK_CHANCE = 0.3;                     // chance a trip has a shipwreck
 const LV_PER_TIER = 6;                        // gear levels per boat
 
 // ======================================================================
-//  FISH — all real ocean species.  depth in px (10px = 1 m)
-//  tier = boat needed · cut = best knife speed · school = [min,max] group size
+//  FISH & PLACES come from fishdata.js (window.FISH_DATA)
 // ======================================================================
-const SPECIES = [
-  { id:'herring', name:'Atlantic Herring', min:15, max:140, value:8, hp:1, size:14, speed:80, tier:0, weight:10, cut:350, school:[7,12],
-    look:{ h:.25, tail:'fork', back:'#2d5f80', side:'#c3d2dc', belly:'#f3f6f8', fin:'#8fa6b5' },
-    fact:'Atlantic herring swim in schools that can contain millions of fish.' },
-  { id:'mackerel', name:'Atlantic Mackerel', min:60, max:240, value:15, hp:1, size:17, speed:90, tier:0, weight:9, cut:450, school:[5,9],
-    look:{ h:.22, tail:'fork', back:'#1d6a5b', side:'#cfe0db', belly:'#f4f7f6', fin:'#6b8f86', pattern:'wavy', finlets:'#6b8f86' },
-    fact:'Mackerel have no swim bladder, so they must keep swimming or they slowly sink.' },
-  { id:'bass', name:'Striped Bass', min:160, max:340, value:30, hp:2, size:21, speed:60, tier:0, weight:7, cut:500, school:[3,5],
-    look:{ h:.3, tail:'fork', back:'#4b5b4a', side:'#d6dace', belly:'#f1f2ec', fin:'#7d8577', pattern:'stripes', dorsal:'two' },
-    fact:'Striped bass live in the ocean but swim up rivers into fresh water to lay their eggs.' },
-  { id:'snapper', name:'Red Snapper', min:260, max:430, value:55, hp:2, size:21, speed:55, tier:0, weight:6, cut:600,
-    look:{ h:.42, tail:'fork', back:'#c8352d', side:'#e5675a', belly:'#f8c3b4', fin:'#d04a3f', dorsal:'spiny', eye:'#d93a2b' },
-    fact:'Red snapper can live for more than 50 years.' },
-  { id:'mahi', name:'Mahi-Mahi', min:380, max:600, value:80, hp:4, size:28, speed:90, tier:1, weight:6, cut:700,
-    look:{ h:.32, tail:'fork', back:'#13866d', side:'#e3c02a', belly:'#f3e7a0', fin:'#1a7fa8', pattern:'bluespots', dorsal:'long', blunt:1 },
-    fact:'Mahi-mahi grow incredibly fast and rarely live longer than about 5 years.' },
-  { id:'yellowfin', name:'Yellowfin Tuna', min:520, max:790, value:130, hp:6, size:30, speed:110, tier:1, weight:6, cut:800, school:[3,5],
-    look:{ h:.3, tail:'lunate', back:'#17305a', side:'#94a4b8', belly:'#e8edf3', fin:'#e8c21c', finlets:'#f0cc1f', pattern:'yellowband', dorsal:'tuna' },
-    fact:'Yellowfin tuna can swim faster than 40 mph (about 65 km/h).' },
-  { id:'cod', name:'Atlantic Cod', min:750, max:1000, value:210, hp:8, size:26, speed:50, tier:2, weight:6, cut:550,
-    look:{ h:.28, tail:'square', back:'#7b6c42', side:'#b6a877', belly:'#ece6cf', fin:'#8a7b52', pattern:'mottled', dorsal:'triple', barbel:true, latline:'#f2eedc' },
-    fact:'Cod use the whisker on their chin, called a barbel, to feel for food on the sea floor.' },
-  { id:'swordfish', name:'Swordfish', min:880, max:1150, value:320, hp:11, size:30, speed:95, tier:2, weight:5, cut:900,
-    look:{ h:.22, tail:'lunate', back:'#3b3c5c', side:'#7e8197', belly:'#d3d4de', fin:'#3b3c5c', bill:'sword', dorsal:'shark' },
-    fact:'Swordfish warm their eyes and brain with a special organ so they can see in cold, deep water.' },
-  { id:'amberjack', name:'Greater Amberjack', min:1050, max:1350, value:480, hp:12, size:30, speed:85, tier:3, weight:6, cut:750, school:[3,4],
-    look:{ h:.3, tail:'fork', back:'#56677a', side:'#c7ccc6', belly:'#eeeee6', fin:'#c9a84a', pattern:'amberline' },
-    fact:'Greater amberjacks love to gather around shipwrecks, reefs and oil rigs.' },
-  { id:'hammer', name:'Hammerhead Shark', min:1200, max:1510, value:700, hp:16, size:38, speed:70, tier:3, weight:5, cut:650,
-    look:{ h:.2, tail:'shark', back:'#7a8791', side:'#99a5ad', belly:'#edf0f2', fin:'#6e7b85', dorsal:'sharktall', shark:true, hammer:true },
-    fact:'A hammerhead’s wide head spreads out its eyes and electric sensors, helping it find prey hidden in the sand.' },
-  { id:'marlin', name:'Blue Marlin', min:1450, max:1700, value:1000, hp:20, size:34, speed:115, tier:4, weight:5, cut:950,
-    look:{ h:.24, tail:'lunate', back:'#173a8c', side:'#6f8fc8', belly:'#dfe6f2', fin:'#1d3f86', bill:'spear', dorsal:'sail', pattern:'bars' },
-    fact:'Female blue marlin can weigh more than 1,000 pounds, much bigger than the males.' },
-  { id:'oarfish', name:'Giant Oarfish', min:1600, max:1870, value:1350, hp:24, size:62, speed:30, tier:4, weight:3, cut:400,
-    look:{ eel:true, h:.09, back:'#c9d2da', side:'#e9eef2', belly:'#f7f9fa', fin:'#d8323a' },
-    fact:'The giant oarfish is the longest bony fish in the world and can grow over 25 feet (8 m) long.' },
-  { id:'angler', name:'Anglerfish', min:1850, max:2100, value:1800, hp:27, size:24, speed:28, tier:5, weight:5, cut:350,
-    look:{ h:.62, tail:'round', back:'#3a2c30', side:'#4d3c40', belly:'#5d4a4e', fin:'#2e2326', angler:true },
-    fact:'Deep-sea anglerfish wave a glowing lure, lit by bacteria, to attract prey in the dark.' },
-  { id:'greenland', name:'Greenland Shark', min:1980, max:2230, value:2400, hp:33, size:42, speed:22, tier:5, weight:4, cut:500,
-    look:{ h:.22, tail:'shark', back:'#4b4943', side:'#5c5a53', belly:'#7a776e', fin:'#45433d', dorsal:'sharksmall', shark:true, blunt:.6 },
-    fact:'Greenland sharks may live 250 years or more, the longest of any animal with a backbone.' },
-  { id:'coelacanth', name:'Coelacanth', min:2200, max:2440, value:3200, hp:38, size:30, speed:25, tier:6, weight:5, cut:600,
-    look:{ h:.3, tail:'coel', back:'#2f4a6a', side:'#46658a', belly:'#5f7ea0', fin:'#2f4a6a', pattern:'blotches', lobed:true },
-    fact:'Coelacanths were thought to be extinct for 65 million years until one was caught in 1938.' },
-  { id:'goliath', name:'Goliath Grouper', min:2380, max:2470, value:4500, hp:45, size:40, speed:30, tier:6, weight:0, cut:450, wreck:true,
-    look:{ h:.42, tail:'round', back:'#6f5f3a', side:'#9c8a5a', belly:'#cdbf92', fin:'#6a5a36', pattern:'grouperbars', bigmouth:true },
-    fact:'Goliath groupers can weigh up to 800 pounds and love to live around shipwrecks.' },
-  // the monster of the deep: only one, at the very bottom. It comes back after you catch it.
-  { id:'squid', name:'Giant Squid', min:2400, max:2460, value:15000, hp:150, size:70, speed:22, tier:6, weight:0, cut:500, monster:true,
-    look:{ squid:true, h:.3, back:'#9c3b30', side:'#c25a49', belly:'#e5a493', fin:'#8a3229' },
-    fact:'Giant squid have the biggest eyes of any animal, about the size of a dinner plate.' },
-];
+const ENVS = window.FISH_DATA.envs;
+const ENV_KEYS = Object.keys(ENVS);
+const SPECIES = window.FISH_DATA.species;
 const speciesById = id => SPECIES.find(s => s.id === id);
 
 // ======================================================================
@@ -99,9 +47,9 @@ const ROD_COLORS  = ['#8b5a2b', '#c9a65b', '#4aa3df', '#555', '#222', '#9fa8b0',
 
 // g = overall gear power index (0..41): boat tier * 6 + level
 const STAT = {
-  rod:    g => 180 + g * 12,                       // lure speed
+  rod:    g => 200 + g * 20,                       // lure speed
   lure:   g => Math.round((2 * Math.floor(g / 6) + 1 + (g % 6) * 0.4) * 10) / 10,   // damage per hit
-  line:   g => 220 + g * 58,                       // slack length
+  line:   g => 220 + g * 124,                      // slack length
   knife:  g => ({ chops: Math.max(1, 4 - Math.floor(g / 10)), zone: g * 16, mult: Math.round((1 + g * 0.033) * 100) / 100 }),
   bucket: g => 4 + Math.floor(g / 6) * 5 + (g % 6),
 };
@@ -145,7 +93,8 @@ const statText = {
 // ======================================================================
 const SAVE_KEY = 'hook-line-sinker-v2';
 function freshState() {
-  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, hooks:0, cannon:0, bait:0, balls:0, bucket:[], seen:{}, earned:0 };
+  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, hooks:0, cannon:0, bait:0, balls:0, bucket:[], seen:{}, earned:0,
+    env:'ocean', caught:0, caughtEnv:{}, trophies:{}, factIdx:{}, username:'', playerKey:'' };
 }
 function load() {
   try {
@@ -158,6 +107,8 @@ function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } cat
 let S = load();
 
 const tier = () => Math.max(0, S.tier);
+const env = () => (ENVS[S.env] ? S.env : 'ocean');
+const ENV = () => ENVS[env()];
 const gIdx = key => tier() * LV_PER_TIER + S.lv[key];
 const gearName = key => `${GEAR[key].names[tier()]} Lv ${S.lv[key] + 1}`;
 const G = () => ({
@@ -190,15 +141,21 @@ function toast(msg, ms = 2400) {
 //  FISH PAINTER — draws real species from their "look"
 //  L = half body length. Faces right when dir = 1.
 // ======================================================================
-function bodyPath(c, L, H, blunt) {
+function bodyPath(c, L, H, blunt, pointy) {
   const b = blunt || 0;
   c.beginPath();
-  c.moveTo(L, H * 0.05);
-  c.bezierCurveTo(L * (0.98 - b * 0.05), -H * (0.45 + b * 0.55), L * 0.6, -H, L * 0.15, -H);
+  if (pointy) {
+    c.moveTo(L * 1.08, H * 0.05);
+    c.bezierCurveTo(L * 0.85, -H * 0.3, L * 0.55, -H, L * 0.15, -H);
+  } else {
+    c.moveTo(L, H * 0.05);
+    c.bezierCurveTo(L * (0.98 - b * 0.05), -H * (0.45 + b * 0.55), L * 0.6, -H, L * 0.15, -H);
+  }
   c.bezierCurveTo(-L * 0.35, -H, -L * 0.65, -H * 0.4, -L * 0.85, -H * 0.17);
   c.lineTo(-L * 0.85, H * 0.17);
   c.bezierCurveTo(-L * 0.65, H * 0.4, -L * 0.35, H * 0.95, L * 0.15, H * 0.95);
-  c.bezierCurveTo(L * 0.6, H * 0.95, L * 0.97, H * 0.5, L, H * 0.05);
+  if (pointy) c.bezierCurveTo(L * 0.55, H * 0.95, L * 0.85, H * 0.35, L * 1.08, H * 0.05);
+  else c.bezierCurveTo(L * 0.6, H * 0.95, L * 0.97, H * 0.5, L, H * 0.05);
   c.closePath();
 }
 function tri(c, pts) { c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); c.fill(); }
@@ -232,6 +189,10 @@ function drawTail(c, type, L, H, sw) {
     c.quadraticCurveTo(-L * 1.2, -H * 0.3 + s, -L * 1.12, H * 0.1 + s);
     c.quadraticCurveTo(-L * 1.1, H * 0.5 + s, -L * 1.16, H * 0.75 + s);
     c.quadraticCurveTo(-L * 0.98, H * 0.4, x0, H * 0.15);
+  } else if (type === 'rat') {    // grenadier: body narrows to a long thin tail
+    c.moveTo(x0, -H * 0.2);
+    c.quadraticCurveTo(-L * 1.2, -H * 0.05 + s, -L * 1.55, s);
+    c.quadraticCurveTo(-L * 1.2, H * 0.05 + s, x0, H * 0.2);
   } else if (type === 'coel') {   // three-lobed tail
     c.moveTo(x0, -H * 0.2);
     c.quadraticCurveTo(-L * 1.05, -H * 0.9 + s, -L * 1.15, -H * 0.85 + s);
@@ -287,6 +248,78 @@ function drawPattern(c, v, L, H, t) {
       c.fillStyle = 'rgba(235,240,245,.75)';
       for (let i = 0; i < 16; i++) { c.beginPath(); c.ellipse(L * (0.65 - ((i * 29) % 150) / 100), -H * (0.75 - ((i * 47) % 140) / 100), L * 0.06, L * 0.035, 0.4, 0, 7); c.fill(); }
       break;
+    case 'tigerbars':   // wahoo
+      c.strokeStyle = 'rgba(20,40,90,.55)'; c.lineWidth = L * 0.035;
+      for (let i = 0; i < 14; i++) { const x = L * 0.55 - i * L * 0.1; c.beginPath(); c.moveTo(x, -H); c.lineTo(x - L * 0.04, H * 0.2); c.stroke(); }
+      break;
+    case 'thumb':       // haddock "Devil's thumbprint"
+      c.fillStyle = 'rgba(20,20,22,.8)';
+      c.beginPath(); c.ellipse(L * 0.38, -H * 0.15, L * 0.08, H * 0.22, 0, 0, 7); c.fill();
+      break;
+    case 'whitespots':  // opah
+      c.fillStyle = 'rgba(250,250,245,.85)';
+      for (let i = 0; i < 22; i++) { c.beginPath(); c.arc(L * (0.7 - ((i * 37) % 155) / 100), -H * (0.85 - ((i * 53) % 160) / 100), L * 0.035, 0, 7); c.fill(); }
+      break;
+    case 'lights':      // glowing photophores along the belly
+      for (let i = 0; i < 10; i++) {
+        const x = L * 0.6 - i * L * 0.15, glow = 0.55 + Math.sin(t * 3 + i) * 0.35;
+        c.fillStyle = `rgba(140,230,255,${glow})`;
+        c.beginPath(); c.arc(x, H * 0.62, Math.max(1, L * 0.025), 0, 7); c.fill();
+        c.beginPath(); c.arc(x - L * 0.07, H * 0.35, Math.max(0.8, L * 0.018), 0, 7); c.fill();
+      }
+      break;
+    case 'palespots':   // arctic char
+      c.fillStyle = 'rgba(240,225,200,.7)';
+      for (let i = 0; i < 18; i++) { c.beginPath(); c.arc(L * (0.65 - ((i * 31) % 150) / 100), -H * (0.75 - ((i * 47) % 110) / 100), L * 0.03, 0, 7); c.fill(); }
+      break;
+    case 'blackspots':  // atlantic salmon
+      c.fillStyle = 'rgba(20,20,25,.7)';
+      for (let i = 0; i < 16; i++) { c.beginPath(); c.arc(L * (0.65 - ((i * 29) % 140) / 100), -H * (0.85 - ((i * 41) % 75) / 100), L * 0.022, 0, 7); c.fill(); }
+      c.fillStyle = 'rgba(240,160,170,.18)'; c.fillRect(-L, -H * 0.1, L * 2, H * 0.3);
+      break;
+    case 'bluegill':    // dark ear flap and faint bars
+      c.fillStyle = 'rgba(30,40,50,.25)';
+      for (let i = 0; i < 6; i++) { c.beginPath(); c.ellipse(L * 0.35 - i * L * 0.22, -H * 0.15, L * 0.06, H * 0.8, 0, 0, 7); c.fill(); }
+      c.fillStyle = '#16202a'; c.beginPath(); c.ellipse(L * 0.5, -H * 0.05, L * 0.08, H * 0.13, 0, 0, 7); c.fill();
+      c.strokeStyle = 'rgba(80,140,220,.6)'; c.lineWidth = L * 0.02;
+      c.beginPath(); c.moveTo(L * 0.95, H * 0.15); c.lineTo(L * 0.62, H * 0.25); c.stroke();
+      break;
+    case 'pumpkinseed': // wavy blue cheek lines + red ear spot
+      c.strokeStyle = 'rgba(70,150,220,.75)'; c.lineWidth = L * 0.025;
+      for (let i = 0; i < 3; i++) { c.beginPath(); c.moveTo(L * 0.95, H * (0.0 + i * 0.12)); c.quadraticCurveTo(L * 0.8, H * (0.1 + i * 0.12), L * 0.62, H * (0.02 + i * 0.12)); c.stroke(); }
+      c.fillStyle = 'rgba(60,110,170,.35)';
+      for (let i = 0; i < 20; i++) { c.beginPath(); c.arc(L * (0.45 - ((i * 31) % 120) / 100), -H * (0.7 - ((i * 43) % 120) / 100), L * 0.03, 0, 7); c.fill(); }
+      c.fillStyle = '#1b1b1b'; c.beginPath(); c.ellipse(L * 0.52, -H * 0.05, L * 0.07, H * 0.11, 0, 0, 7); c.fill();
+      c.fillStyle = '#e0312a'; c.beginPath(); c.arc(L * 0.47, -H * 0.05, L * 0.03, 0, 7); c.fill();
+      break;
+    case 'band':        // largemouth bass dark side band
+      c.fillStyle = 'rgba(30,45,20,.65)';
+      for (let i = 0; i < 12; i++) { c.beginPath(); c.ellipse(L * 0.6 - i * L * 0.13, -H * 0.05 + Math.sin(i * 1.7) * H * 0.06, L * 0.08, H * 0.13, 0, 0, 7); c.fill(); }
+      break;
+    case 'speckle':     // crappie
+      c.fillStyle = 'rgba(25,30,25,.6)';
+      for (let i = 0; i < 40; i++) { c.beginPath(); c.arc(L * (0.65 - ((i * 37) % 150) / 100), -H * (0.9 - ((i * 53) % 170) / 100), L * (0.02 + (i % 3) * 0.008), 0, 7); c.fill(); }
+      break;
+    case 'catspots':    // channel catfish
+      c.fillStyle = 'rgba(25,30,35,.55)';
+      for (let i = 0; i < 16; i++) { c.beginPath(); c.arc(L * (0.6 - ((i * 37) % 140) / 100), -H * (0.6 - ((i * 53) % 90) / 100), L * 0.022, 0, 7); c.fill(); }
+      break;
+    case 'eyespot':     // bowfin tail spot
+      c.fillStyle = '#e8902a'; c.beginPath(); c.arc(-L * 0.7, -H * 0.3, L * 0.075, 0, 7); c.fill();
+      c.fillStyle = '#141414'; c.beginPath(); c.arc(-L * 0.7, -H * 0.3, L * 0.05, 0, 7); c.fill();
+      c.fillStyle = 'rgba(40,50,25,.3)';
+      for (let i = 0; i < 14; i++) { c.beginPath(); c.arc(L * (0.6 - ((i * 37) % 130) / 100), -H * (0.6 - ((i * 53) % 110) / 100), L * 0.05, 0, 7); c.fill(); }
+      break;
+    case 'chain':       // chain pickerel
+      c.strokeStyle = 'rgba(35,40,20,.7)'; c.lineWidth = Math.max(1, L * 0.018);
+      for (let r = 0; r < 3; r++) for (let i = 0; i < 10; i++) {
+        c.beginPath(); c.ellipse(L * 0.6 - i * L * 0.15 + (r % 2) * L * 0.07, -H * 0.55 + r * H * 0.45, L * 0.07, H * 0.2, 0, 0, 7); c.stroke();
+      }
+      break;
+    case 'garspots':
+      c.fillStyle = 'rgba(30,28,15,.65)';
+      for (let i = 0; i < 30; i++) { c.beginPath(); c.arc(L * (0.75 - ((i * 37) % 165) / 100), -H * (0.85 - ((i * 53) % 150) / 100), L * 0.028, 0, 7); c.fill(); }
+      break;
     case 'grouperbars':
       c.fillStyle = 'rgba(50,38,18,.4)';
       for (let i = 0; i < 5; i++) { c.beginPath(); c.ellipse(L * 0.45 - i * L * 0.3, -H * 0.2, L * 0.09, H * 0.75, 0.15, 0, 7); c.fill(); }
@@ -304,13 +337,21 @@ function drawEel(c, sp, v, L, t, flash) {
     pts.push([x, Math.sin(t * 3 - u * 7) * L * 0.08 * u, L * v.h * (1 - u * 0.75)]);
   }
   c.strokeStyle = v.fin; c.lineWidth = Math.max(1.5, L * 0.025);
-  for (let i = 1; i < N; i += 1) {   // dorsal crest
-    const [x, y, h] = pts[i];
-    c.beginPath(); c.moveTo(x, y - h); c.lineTo(x - L * 0.03, y - h - L * 0.07); c.stroke();
+  if (v.crest) {
+    for (let i = 1; i < N; i += 1) {   // oarfish red dorsal crest
+      const [x, y, h] = pts[i];
+      c.beginPath(); c.moveTo(x, y - h); c.lineTo(x - L * 0.03, y - h - L * 0.07); c.stroke();
+    }
+    c.beginPath(); c.moveTo(L * 0.85, -L * 0.08); c.quadraticCurveTo(L * 0.8, -L * 0.35, L * 0.55, -L * 0.42 + Math.sin(t * 4) * 3); c.stroke();
+    c.beginPath(); c.moveTo(L * 0.8, -L * 0.08); c.quadraticCurveTo(L * 0.7, -L * 0.28, L * 0.5, -L * 0.3); c.stroke();
+  } else {
+    // a low fin running along the back and belly to the tail
+    c.fillStyle = v.fin;
+    c.beginPath();
+    for (let i = 6; i <= N; i++) { const [x, y, h] = pts[i]; i === 6 ? c.moveTo(x, y - h) : c.lineTo(x, y - h - L * 0.035 * (i / N)); }
+    for (let i = N; i >= 8; i--) { const [x, y, h] = pts[i]; c.lineTo(x, y + h + L * 0.03 * (i / N)); }
+    c.closePath(); c.fill();
   }
-  // crest plume on the head
-  c.beginPath(); c.moveTo(L * 0.85, -L * 0.08); c.quadraticCurveTo(L * 0.8, -L * 0.35, L * 0.55, -L * 0.42 + Math.sin(t * 4) * 3); c.stroke();
-  c.beginPath(); c.moveTo(L * 0.8, -L * 0.08); c.quadraticCurveTo(L * 0.7, -L * 0.28, L * 0.5, -L * 0.3); c.stroke();
   const g = c.createLinearGradient(0, -L * v.h, 0, L * v.h);
   g.addColorStop(0, v.back); g.addColorStop(0.5, v.side); g.addColorStop(1, v.belly);
   c.fillStyle = flash ? '#fff' : g;
@@ -320,8 +361,42 @@ function drawEel(c, sp, v, L, t, flash) {
   c.closePath(); c.fill();
   c.fillStyle = 'rgba(80,90,110,.35)';
   for (let i = 3; i < N; i += 2) { const [x, y] = pts[i]; c.beginPath(); c.arc(x, y, L * 0.012, 0, 7); c.fill(); }
+  if (v.frill) {   // frilled shark: frilly gill slits and a wide mouth
+    c.strokeStyle = 'rgba(160,60,60,.8)'; c.lineWidth = Math.max(1, L * 0.012);
+    for (let i = 0; i < 6; i++) { const x = L * (0.78 - i * 0.03); c.beginPath(); c.moveTo(x, -L * 0.07); c.quadraticCurveTo(x - L * 0.02, 0, x, L * 0.07); c.stroke(); }
+    c.strokeStyle = '#f2efe6'; c.lineWidth = Math.max(0.8, L * 0.008);
+    c.beginPath(); c.moveTo(L * 0.99, L * 0.01); c.lineTo(L * 0.86, L * 0.03); c.stroke();
+  }
+  if (v.noeye) {   // hagfish: no real eyes, just barbels around the mouth
+    c.strokeStyle = v.fin; c.lineWidth = Math.max(1, L * 0.012);
+    for (let i = 0; i < 3; i++) { c.beginPath(); c.moveTo(L * 0.98, -L * 0.01 + i * L * 0.015); c.lineTo(L * 1.06, -L * 0.03 + i * L * 0.03); c.stroke(); }
+    return;
+  }
   c.fillStyle = '#fff'; c.beginPath(); c.arc(L * 0.9, -L * 0.015, L * 0.03, 0, 7); c.fill();
   c.fillStyle = '#111'; c.beginPath(); c.arc(L * 0.91, -L * 0.015, L * 0.016, 0, 7); c.fill();
+}
+
+function drawFlat(c, v, L, H, t, flash) {
+  // flatfish (halibut) seen from above: a big oval with a fin fringe all around, both eyes on top
+  const ripple = Math.sin(t * 4) * L * 0.02;
+  c.fillStyle = v.fin;
+  c.beginPath(); c.moveTo(-L * 0.78, 0); c.lineTo(-L * 1.15, -H * 0.45 + ripple); c.quadraticCurveTo(-L * 1.05, 0, -L * 1.15, H * 0.45 + ripple); c.closePath(); c.fill();
+  c.beginPath(); c.ellipse(-L * 0.05, 0, L * 0.92, H * 1.12 + ripple, 0, 0, 7); c.fill();
+  const g = c.createRadialGradient(L * 0.1, -H * 0.2, L * 0.1, 0, 0, L);
+  g.addColorStop(0, v.side); g.addColorStop(1, v.back);
+  c.fillStyle = flash ? '#fff' : g;
+  c.beginPath(); c.ellipse(0, 0, L * 0.85, H, 0, 0, 7); c.fill();
+  c.save(); c.beginPath(); c.ellipse(0, 0, L * 0.85, H, 0, 0, 7); c.clip();
+  drawPattern(c, v, L, H, t);
+  c.strokeStyle = 'rgba(255,255,255,.2)'; c.lineWidth = Math.max(1, L * 0.02);
+  c.beginPath(); c.moveTo(L * 0.6, -H * 0.1); c.quadraticCurveTo(0, H * 0.05, -L * 0.8, 0); c.stroke();
+  c.restore();
+  [[L * 0.62, -H * 0.42], [L * 0.7, -H * 0.12]].forEach(([ex, ey]) => {
+    c.fillStyle = '#f4f1e6'; c.beginPath(); c.arc(ex, ey, L * 0.06, 0, 7); c.fill();
+    c.fillStyle = '#0d0d0d'; c.beginPath(); c.arc(ex + L * 0.01, ey, L * 0.035, 0, 7); c.fill();
+  });
+  c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = Math.max(1, L * 0.025);
+  c.beginPath(); c.moveTo(L * 0.82, H * 0.15); c.quadraticCurveTo(L * 0.7, H * 0.32, L * 0.55, H * 0.25); c.stroke();
 }
 
 function drawSquid(c, v, L, t, flash) {
@@ -376,6 +451,8 @@ function drawFish(c, x, y, sp, dir, t, opts = {}) {
   if (opts.angle) c.rotate(opts.angle);
   if (v.eel) { drawEel(c, sp, v, L, t, opts.flash); c.restore(); return; }
   if (v.squid) { drawSquid(c, v, L, t, opts.flash); c.restore(); return; }
+  if (v.flat) { drawFlat(c, v, L, H, t, opts.flash); c.restore(); return; }
+  if (v.jelly) c.globalAlpha = 0.85;
   const sw = Math.sin(t * (v.shark ? 5 : 9)) * 0.14;
   const fin = v.fin;
 
@@ -418,10 +495,32 @@ function drawFish(c, x, y, sp, dir, t, opts = {}) {
       tri(c, [[L * 0.1, -H * 0.9], [-L * 0.02, -H * 1.35], [-L * 0.15, -H * 0.9]]);
       tri(c, [[-L * 0.35, -H * 0.75], [-L * 0.45, -H * 1.2], [-L * 0.55, -H * 0.65]]);
       break;
+    case 'opah':
+      c.beginPath(); c.moveTo(L * 0.35, -H * 0.85); c.quadraticCurveTo(L * 0.2, -H * 1.7, L * 0.05, -H * 1.75); c.quadraticCurveTo(-L * 0.2, -H * 1.0, -L * 0.7, -H * 0.3); c.lineTo(-L * 0.4, -H * 0.6); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(-L * 0.1, H * 0.85); c.quadraticCurveTo(-L * 0.4, H * 1.1, -L * 0.7, H * 0.3); c.closePath(); c.fill();
+      break;
+    case 'small':
+      tri(c, [[L * 0.3, -H * 0.85], [L * 0.18, -H * 1.45], [L * 0.05, -H * 0.9]]);
+      tri(c, [[-L * 0.3, H * 0.8], [-L * 0.45, H * 1.3], [-L * 0.65, H * 0.5]]);
+      break;
+    case 'longlow':
+      c.beginPath(); c.moveTo(L * 0.25, -H * 0.9); c.quadraticCurveTo(-L * 0.2, -H * 1.35, -L * 0.82, -H * 0.3); c.lineTo(-L * 0.6, -H * 0.55); c.closePath(); c.fill();
+      break;
+    case 'rear':
+      tri(c, [[-L * 0.35, -H * 0.8], [-L * 0.55, -H * 1.5], [-L * 0.72, -H * 0.45]]);
+      tri(c, [[-L * 0.35, H * 0.8], [-L * 0.55, H * 1.5], [-L * 0.72, H * 0.45]]);
+      break;
     default:
       if (!v.angler) tri(c, [[L * 0.3, -H * 0.85], [L * 0.05, -H * 1.55], [-L * 0.3, -H * 0.8]]);
   }
   if (!v.dorsal || v.dorsal === 'two' || v.dorsal === 'spiny' || v.dorsal === 'triple') tri(c, [[-L * 0.15, H * 0.85], [-L * 0.35, H * 1.35], [-L * 0.55, H * 0.6]]);
+  if (v.cat) {   // catfish & sturgeon whiskers (drawn behind the head so they trail)
+    c.strokeStyle = v.fin; c.lineWidth = Math.max(1.2, L * 0.022); c.lineCap = 'round';
+    const w = Math.sin(t * 3) * L * 0.03;
+    [[0.98, -0.1, 1.3, -0.85], [0.95, 0.15, 1.28, 0.75], [0.9, 0.3, 1.12, 0.95], [0.92, -0.2, 1.1, -0.6]].forEach(([a, b, cx2, d]) => {
+      c.beginPath(); c.moveTo(L * a, H * b); c.quadraticCurveTo(L * (a + cx2) / 2, H * (b + d) / 2 + w, L * cx2, H * d + w); c.stroke();
+    });
+  }
   if (v.lobed) {   // coelacanth's fleshy lobed fins
     [[L * 0.05, -H * 0.9, -1], [-L * 0.45, -H * 0.7, -1], [-L * 0.1, H * 0.9, 1], [-L * 0.45, H * 0.7, 1]].forEach(([fx, fy, s]) => {
       c.beginPath(); c.ellipse(fx, fy + s * H * 0.35, L * 0.08, H * 0.4, s * 0.5, 0, 7); c.fill();
@@ -429,11 +528,11 @@ function drawFish(c, x, y, sp, dir, t, opts = {}) {
   }
 
   // ---- body ----
-  bodyPath(c, L, H, v.blunt);
+  bodyPath(c, L, H, v.blunt, v.pointy);
   const g = c.createLinearGradient(0, -H, 0, H);
   g.addColorStop(0, v.back); g.addColorStop(0.45, v.side); g.addColorStop(1, v.belly);
   c.fillStyle = g; c.fill();
-  c.save(); bodyPath(c, L, H, v.blunt); c.clip();
+  c.save(); bodyPath(c, L, H, v.blunt, v.pointy); c.clip();
   drawPattern(c, v, L, H, t);
   // lateral line
   c.strokeStyle = v.latline || 'rgba(255,255,255,.25)'; c.lineWidth = Math.max(0.8, L * 0.02);
@@ -460,13 +559,43 @@ function drawFish(c, x, y, sp, dir, t, opts = {}) {
 
   // ---- head features ----
   const eyeX = v.angler ? L * 0.55 : v.shark ? L * 0.78 : L * 0.72, eyeY = v.angler ? -H * 0.35 : -H * 0.18;
-  const eyeR = Math.max(2, L * (v.angler ? 0.06 : v.shark ? 0.035 : 0.075));
+  const eyeR = Math.max(2, L * (v.angler ? 0.06 : v.shark ? 0.035 : v.bigeye ? 0.11 : v.cat ? 0.05 : 0.075));
   if (v.bill === 'sword') {
     c.fillStyle = v.back;
     tri(c, [[L * 0.95, -H * 0.22], [L * 2.0, -H * 0.02], [L * 0.95, H * 0.12]]);
   } else if (v.bill === 'spear') {
     c.fillStyle = v.back;
     tri(c, [[L * 0.95, -H * 0.15], [L * 1.7, H * 0.02], [L * 0.95, H * 0.1]]);
+  }
+  if (v.bill === 'pike' || v.bill === 'gar' || v.bill === 'gator') {
+    const len = v.bill === 'pike' ? 0.28 : v.bill === 'gar' ? 0.6 : 0.5, wdt = v.bill === 'gator' ? 0.3 : v.bill === 'gar' ? 0.14 : 0.24;
+    c.fillStyle = v.back;
+    c.beginPath(); c.moveTo(L * 0.85, -H * wdt * 1.6); c.lineTo(L * (1 + len), -H * wdt * 0.4); c.lineTo(L * (1 + len), H * wdt * 0.3); c.lineTo(L * 0.85, H * wdt * 1.4); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = Math.max(1, L * 0.015);
+    c.beginPath(); c.moveTo(L * 0.85, 0); c.lineTo(L * (1 + len), 0); c.stroke();
+    if (v.bill !== 'pike') {
+      c.fillStyle = '#f2efe6';
+      for (let i = 0; i < 8; i++) { const tx = L * (0.9 + i * len / 8); tri(c, [[tx, 0], [tx + L * 0.012, H * wdt * 0.45], [tx + L * 0.025, 0]]); }
+    }
+  }
+  if (v.bill === 'paddle') {
+    c.fillStyle = v.side;
+    c.beginPath(); c.moveTo(L * 0.85, -H * 0.25); c.quadraticCurveTo(L * 1.5, -H * 0.35, L * 1.85, -H * 0.4); c.quadraticCurveTo(L * 1.95, -H * 0.1, L * 1.85, H * 0.15); c.quadraticCurveTo(L * 1.5, H * 0.1, L * 0.85, H * 0.2); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(40,50,60,.35)';
+    for (let i = 0; i < 10; i++) { c.beginPath(); c.arc(L * (1.05 + i * 0.08), -H * 0.1 + (i % 2) * H * 0.12, L * 0.012, 0, 7); c.fill(); }
+  }
+  if (v.scutes) {  // sturgeon bony plates
+    c.fillStyle = '#d9d6c9';
+    for (let i = 0; i < 9; i++) { const x = L * 0.55 - i * L * 0.15; tri(c, [[x, -H * 0.88], [x - L * 0.05, -H * 1.12], [x - L * 0.1, -H * 0.86]]); tri(c, [[x, H * 0.05], [x - L * 0.05, -H * 0.12], [x - L * 0.1, H * 0.06]]); }
+  }
+  if (v.lumps) {   // lumpsucker bumps
+    c.fillStyle = 'rgba(40,60,35,.6)';
+    for (let i = 0; i < 14; i++) { c.beginPath(); c.arc(L * (0.6 - ((i * 37) % 140) / 100), -H * (0.75 - ((i * 53) % 110) / 100), L * 0.045, 0, 7); c.fill(); }
+  }
+  if (v.spines) {  // sculpin head spines
+    c.fillStyle = v.fin;
+    tri(c, [[L * 0.62, -H * 0.15], [L * 0.45, -H * 0.55], [L * 0.55, -H * 0.1]]);
+    tri(c, [[L * 0.7, -H * 0.55], [L * 0.6, -H * 1.0], [L * 0.75, -H * 0.6]]);
   }
   if (v.hammer) {
     c.fillStyle = v.back;
@@ -493,6 +622,11 @@ function drawFish(c, x, y, sp, dir, t, opts = {}) {
     c.strokeStyle = 'rgba(0,0,0,.3)'; c.lineWidth = Math.max(1, L * 0.02);
     c.beginPath(); c.moveTo(L * 0.92, H * 0.35); c.quadraticCurveTo(L * 0.82, H * 0.5, L * 0.72, H * 0.38); c.stroke();
   }
+  if (v.fangs) {
+    c.fillStyle = '#f4f1e6';
+    [[0.98, -0.02, 0.3], [0.9, 0.0, 0.42], [0.82, 0.02, 0.32]].forEach(([fx, fy, len]) => tri(c, [[L * fx, H * fy], [L * (fx - 0.02), H * (fy + len)], [L * (fx - 0.04), H * fy]]));
+    [[0.95, 0.25, -0.28], [0.86, 0.27, -0.24]].forEach(([fx, fy, len]) => tri(c, [[L * fx, H * fy], [L * (fx - 0.02), H * (fy + len)], [L * (fx - 0.04), H * fy]]));
+  }
   if (v.barbel) {
     c.strokeStyle = v.side; c.lineWidth = Math.max(1, L * 0.025);
     c.beginPath(); c.moveTo(L * 0.82, H * 0.4); c.lineTo(L * 0.8, H * 0.8); c.stroke();
@@ -511,6 +645,7 @@ function drawFish(c, x, y, sp, dir, t, opts = {}) {
   else tri(c, [[L * 0.55, H * 0.15], [L * 0.25, H * (0.45 + Math.sin(t * 6) * 0.1)], [L * 0.32, H * 0.05]]);
   c.globalAlpha = 1;
 
+  c.globalAlpha = 1;
   if (opts.flash) {
     c.globalCompositeOperation = 'source-atop';
     c.fillStyle = 'rgba(255,255,255,.7)';
@@ -562,6 +697,9 @@ function renderDock() {
   }
   $('sellBtn').disabled = !fillets.length;
   renderSupplies();
+  renderEnvPicker();
+  renderTrophies();
+  renderLeaderboard();
 
   $('sailBtn').disabled = !starterDone;
   $('sailNote').textContent = starterDone
@@ -694,13 +832,16 @@ function sellAll() {
   S.bucket = S.bucket.filter(f => !f.filleted);
   save();
   toast(`Sold ${fillets.length} fillet${fillets.length > 1 ? 's' : ''} for 🪙 ${fmt(total)}!`);
+  syncSoon();
   renderDock();
 }
 
 function renderGuide() {
   const el = $('fishGuide');
   el.innerHTML = '';
-  SPECIES.forEach(sp => {
+  const list = SPECIES.filter(sp => sp.env === env());
+  $('guideTitle').textContent = `📖 ${ENV().name} Fish Guide (${list.filter(sp => S.seen[sp.id]).length}/${list.length} found)`;
+  list.forEach(sp => {
     const known = S.seen[sp.id];
     const d = document.createElement('div');
     d.className = 'gfish' + (known ? '' : ' locked');
@@ -708,7 +849,7 @@ function renderGuide() {
     c.width = 180; c.height = 84;
     const cx = c.getContext('2d');
     const v = sp.look;
-    const wide = v.squid ? 3.0 : v.bill === 'sword' ? 3.3 : v.bill ? 3.0 : v.eel ? 2.15 : 2.65;
+    const wide = v.squid ? 3.0 : v.bill === 'sword' ? 3.3 : v.bill === 'paddle' ? 3.2 : v.bill ? 3.0 : v.eel ? 2.15 : 2.65;
     const tall = v.eel ? 0.5 : v.h * (v.dorsal === 'sail' ? 3.6 : v.dorsal === 'sharktall' ? 3.6 : v.angler ? 3.4 : 2.6);
     const scale = Math.min(2.4, 160 / (sp.size * wide), 70 / (sp.size * tall));
     cx.save(); cx.translate(v.bill ? 72 : v.squid ? 70 : 96, v.dorsal === 'sail' || v.dorsal === 'sharktall' || v.angler ? 50 : 44); cx.scale(scale, scale);
@@ -718,12 +859,140 @@ function renderGuide() {
     d.appendChild(c);
     d.insertAdjacentHTML('beforeend',
       `<b>${known ? sp.name : '???'}</b>${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m · ${sp.hp} HP` +
-      (sp.monster ? `<br><i>One lives at the very bottom. It comes back after you catch it!</i>` :
+      (sp.boss ? `<br><i>👑 Final fish! One lives at the very bottom and comes back after you catch it.</i>` :
        sp.wreck ? `<br><i>Only near shipwrecks</i>` :
        sp.tier > tier() ? `<br><i>Needs ${BOATS[sp.tier].name}</i>` : '') +
-      (known ? `<span class="gfact">${sp.fact}</span>` : ''));
+      (known ? `<span class="gfact">${sp.facts[0]}</span>` : ''));
     el.appendChild(d);
   });
+}
+
+// ---------------- places to fish ----------------
+function renderEnvPicker() {
+  const el = $('envPicker');
+  el.innerHTML = ENV_KEYS.map(e => `
+    <button class="env-btn env-${e} ${e === env() ? 'on' : ''}" data-env="${e}">
+      <span class="eicon">${ENVS[e].icon}</span><b>${ENVS[e].name}</b><small>${ENVS[e].blurb}</small>
+    </button>`).join('');
+  el.querySelectorAll('.env-btn').forEach(b => b.onclick = () => { S.env = b.dataset.env; save(); renderDock(); });
+  $('sailBtn').textContent = `Head out to the ${ENV().name} ${ENV().icon}`;
+}
+
+// ---------------- trophy room: the final fish of each place ----------------
+function renderTrophies() {
+  const el = $('trophies');
+  el.innerHTML = '';
+  ENV_KEYS.forEach(e => {
+    const sp = bossOf(e), n = S.trophies[e] || 0;
+    const d = document.createElement('div');
+    d.className = 'trophy' + (n ? ' won' : '');
+    const c = document.createElement('canvas');
+    c.width = 200; c.height = 80;
+    const cx = c.getContext('2d');
+    const sc = Math.min(1, 150 / (sp.size * 3.1));
+    cx.save(); cx.translate(sp.look.squid ? 80 : 104, 40); cx.scale(sc, sc);
+    if (!n) cx.filter = 'brightness(0) opacity(.35)';
+    drawFish(cx, 0, 0, sp, 1, 0);
+    cx.restore();
+    d.appendChild(c);
+    d.insertAdjacentHTML('beforeend', n
+      ? `<b>${ENVS[e].icon} ${sp.name}</b><small>Beaten ${n} time${n > 1 ? 's' : ''}!</small>`
+      : `<b>${ENVS[e].icon} ???</b><small>Beat the final fish at the very bottom of the ${ENVS[e].name}.</small>`);
+    el.appendChild(d);
+  });
+}
+
+// ---------------- online leaderboards ----------------
+const LB_BOARDS = [
+  { key: 'earned', label: '💰 Most money', value: p => p.earned || 0, show: v => `🪙 ${fmt(v)}` },
+  { key: 'caught', label: '🐟 Most fish', value: p => p.caught || 0, show: v => `${fmt(v)} fish` },
+  ...ENV_KEYS.map(e => ({ key: e, label: `${ENVS[e].icon} ${ENVS[e].name}`, value: p => (p.env && p.env[e]) || 0, show: v => `${fmt(v)} fish` })),
+];
+let lbTab = 'earned', lbPlayers = null, lbError = '', lbEditing = false, lbFormMsg = '';
+const NAME_OK = /^[A-Za-z0-9 _-]{3,16}$/;
+const esc = t => String(t).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+function randomKey() {
+  try { return Array.from(crypto.getRandomValues(new Uint8Array(24)), b => b.toString(16).padStart(2, '0')).join(''); }
+  catch (e) { return Array.from({ length: 48 }, () => Math.floor(Math.random() * 16).toString(16)).join(''); }
+}
+function myStats(name) {
+  return { name: name || S.username, key: S.playerKey, earned: S.earned || 0, caught: S.caught || 0,
+           env: S.caughtEnv || {}, trophies: ENV_KEYS.filter(e => S.trophies[e]) };
+}
+async function loadLeaderboard() {
+  try {
+    const r = await fetch('/api/leaderboard', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    lbPlayers = (await r.json()).players || [];
+    lbError = '';
+  } catch (e) { lbError = 'The leaderboard is offline right now. Your scores will be sent when it’s back.'; }
+  renderLeaderboard();
+}
+let syncTimer = null;
+function syncSoon() { if (!S.username) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 1200); }
+async function syncNow() {
+  if (!S.username || !S.playerKey) return;
+  try {
+    const r = await fetch('/api/leaderboard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(myStats()) });
+    if (r.ok && !$('dock').classList.contains('hidden')) loadLeaderboard();
+  } catch (e) { /* offline: try again next time */ }
+}
+async function claimName(name) {
+  name = name.trim().replace(/\s+/g, ' ');
+  if (!NAME_OK.test(name)) { lbFormMsg = 'Use 3–16 letters, numbers, spaces, - or _.'; renderLeaderboard(); return; }
+  if (!S.playerKey) { S.playerKey = randomKey(); save(); }
+  lbFormMsg = 'Saving…'; renderLeaderboard();
+  try {
+    const r = await fetch('/api/leaderboard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(myStats(name)) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { lbFormMsg = d.error || 'Could not save that name. Try again.'; renderLeaderboard(); return; }
+    S.username = d.player.name; save();
+    lbEditing = false; lbFormMsg = '';
+    toast(`Welcome, ${S.username}! You're on the leaderboard. 🏆`);
+    loadLeaderboard();
+  } catch (e) { lbFormMsg = 'The leaderboard is offline right now. Try again later.'; renderLeaderboard(); }
+}
+function renderLeaderboard() {
+  const user = $('lbUser');
+  if (!S.username || lbEditing) {
+    user.innerHTML = `
+      <p class="muted">${S.username ? 'Pick a new username:' : 'Pick a username so everyone can see your scores!'}</p>
+      <form class="lb-form" id="lbForm">
+        <input id="lbName" maxlength="16" placeholder="Your username" autocomplete="off" value="${esc(lbEditing ? '' : '')}">
+        <button class="btn green" type="submit">Save name</button>
+        ${lbEditing ? '<button class="btn ghost" type="button" id="lbCancel">Cancel</button>' : ''}
+      </form>
+      ${lbFormMsg ? `<p class="lb-msg">${esc(lbFormMsg)}</p>` : ''}`;
+    $('lbForm').onsubmit = e => { e.preventDefault(); claimName($('lbName').value); };
+    if ($('lbCancel')) $('lbCancel').onclick = () => { lbEditing = false; lbFormMsg = ''; renderLeaderboard(); };
+  } else {
+    user.innerHTML = `<p>Playing as <b>${esc(S.username)}</b> <button class="linkish" id="lbChange">change</button></p>`;
+    $('lbChange').onclick = () => { lbEditing = true; renderLeaderboard(); };
+  }
+
+  $('lbTabs').innerHTML = LB_BOARDS.map(b => `<button class="lb-tab ${b.key === lbTab ? 'on' : ''}" data-k="${b.key}">${b.label}</button>`).join('') +
+    `<button class="lb-tab refresh" id="lbRefresh" title="Refresh">↻</button>`;
+  $('lbTabs').querySelectorAll('.lb-tab[data-k]').forEach(b => b.onclick = () => { lbTab = b.dataset.k; renderLeaderboard(); });
+  $('lbRefresh').onclick = () => { lbPlayers = null; renderLeaderboard(); loadLeaderboard(); };
+
+  const list = $('lbList');
+  if (lbError) { list.innerHTML = `<p class="muted">${esc(lbError)}</p>`; return; }
+  if (!lbPlayers) { list.innerHTML = `<p class="muted">Loading…</p>`; return; }
+  const board = LB_BOARDS.find(b => b.key === lbTab);
+  const rows = lbPlayers.map(p => ({ p, v: board.value(p) })).filter(r => r.v > 0).sort((a, b) => b.v - a.v);
+  if (!rows.length) { list.innerHTML = `<p class="muted">No scores yet. Be the first!</p>`; return; }
+  const me = S.username && S.username.toLowerCase();
+  const medal = i => ['🥇', '🥈', '🥉'][i] || `${i + 1}.`;
+  const row = (r, i) => `
+    <div class="lb-row ${r.p.name.toLowerCase() === me ? 'me' : ''}">
+      <span class="rank">${medal(i)}</span>
+      <span class="who">${esc(r.p.name)} ${(r.p.trophies || []).map(e => `<span title="Beat the ${ENVS[e] ? ENVS[e].name : ''} final fish">👑${ENVS[e] ? ENVS[e].icon : ''}</span>`).join('')}</span>
+      <b class="val">${board.show(r.v)}</b>
+    </div>`;
+  let html = rows.slice(0, 10).map(row).join('');
+  const myIdx = rows.findIndex(r => r.p.name.toLowerCase() === me);
+  if (myIdx >= 10) html += `<div class="lb-gap">⋯</div>` + row(rows[myIdx], myIdx);
+  list.innerHTML = html;
 }
 
 $('sellBtn').onclick = sellAll;
@@ -738,7 +1007,8 @@ $('resetBtn').onclick = () => {
   }
   clearTimeout(resetArmed); resetArmed = null;
   b.textContent = 'Start a new game';
-  S = freshState(); save(); renderDock();
+  const keep = { username: S.username, playerKey: S.playerKey };
+  S = Object.assign(freshState(), keep); save(); renderDock();
   toast('New game! You have 100 coins.');
 };
 
@@ -781,7 +1051,8 @@ function enterSea() {
   Object.assign(lure, { active:false, reeling:false, hooks:[] });
   while (unitCount() < targetFishCount()) spawnFish(true);
 
-  if (Math.random() < WRECK_CHANCE) {
+  setupScenery();
+  if (ENV().wrecks && Math.random() < WRECK_CHANCE) {
     const w = { x: rand(190, W - 190), tilt: rand(-0.1, 0.1), flip: Math.random() < 0.5 ? -1 : 1 };
     wrecks.push(w);
     for (let i = 0; i < 7; i++) spawnWreckFish(w);
@@ -794,7 +1065,7 @@ function enterSea() {
     toast(`📡 Sonar ping! A shipwreck is resting on the sea floor (${SEA_DEPTH / PX_PER_M} m)` +
       (canReach ? '. Lots of fish are hiding there!' : '. You need a much longer line to reach it.'), 4200);
   } else {
-    toast('Walk to the left side of your boat to start fishing! 🎣');
+    toast(`${ENV().icon} Welcome to the ${ENV().name}! Walk to the left side of your boat to start fishing.`);
   }
   requestAnimationFrame(loop);
 }
@@ -811,7 +1082,7 @@ function leaveSea() {
   if (raw) toast(`You still have ${raw} raw fish. Fillet them on your boat before selling!`, 3200);
 }
 
-function targetFishCount() { return 24 + tier() * 4; }
+function targetFishCount() { return 26 + tier() * 6; }
 
 function makeFish(sp, x, baseY, dir, speed) {
   return {
@@ -834,7 +1105,7 @@ function pickWeighted(list) {
   return list[0];
 }
 function spawnFish(anywhere) {
-  const pool = SPECIES.filter(s => !s.wreck && !s.monster && s.tier <= tier());
+  const pool = SPECIES.filter(s => s.env === env() && !s.wreck && !s.boss && s.tier <= tier());
   const schoolers = pool.filter(s => s.school);
   const isSchool = schoolers.length && Math.random() < SCHOOL_CHANCE;
   let sp, depth;
@@ -872,20 +1143,21 @@ function spawnFish(anywhere) {
 function unitCount() { return new Set(fish.filter(f => !f.home && !f.hooked).map(f => f.unit)).size; }
 
 function spawnWreckFish(w) {
-  const deep = SPECIES.filter(s => !s.wreck && !s.monster && s.tier <= tier()).slice(-3);
+  const deep = SPECIES.filter(s => s.env === 'ocean' && !s.wreck && !s.boss && s.tier <= tier()).slice(-3);
   const sp = Math.random() < 0.3 ? speciesById('goliath') : deep[Math.floor(Math.random() * deep.length)];
   const f = makeFish(sp, w.x + rand(-150, 150), WORLD_H - rand(40, 170), Math.random() < 0.5 ? 1 : -1);
   f.home = w; f.range = rand(90, 180); f.speed *= 0.6;
   fish.push(f);
 }
 
-// One Giant Squid lives at the very bottom. Catch it and another shows up a while later.
+// Each place has one final boss fish at the very bottom. Catch it and another shows up a while later.
+const bossOf = e => SPECIES.find(s => s.env === e && s.boss);
 function spawnMonster(announce) {
-  const sp = speciesById('squid');
+  const sp = bossOf(env());
   const f = makeFish(sp, rand(150, W - 150), SURF + rand(sp.min, sp.max), Math.random() < 0.5 ? 1 : -1);
   f.home = { x: W / 2 }; f.range = 360; f.amp = 6;
   fish.push(f);
-  if (announce && lureReach() >= SEA_DEPTH - 150) toast('🦑 Something huge is moving at the very bottom again…', 3500);
+  if (announce && lureReach() >= SEA_DEPTH - 150) toast(`👑 Something huge is moving at the very bottom again…`, 3500);
 }
 
 function addFloat(x, y, text, color = '#fff') { floats.push({ x, y, text, color, life: 1.2 }); }
@@ -957,11 +1229,22 @@ function reelIn() { if (lure.active) { lure.reeling = true; updateHud(); } }
 function finishReel(instant) {
   const caught = lure.hooks;
   if (caught.length) {
-    caught.forEach(f => { S.bucket.push({ id: f.sp.id, filleted: false, value: 0 }); S.seen[f.sp.id] = true; });
-    if (caught.some(f => f.sp.monster)) {
+    caught.forEach(f => {
+      S.bucket.push({ id: f.sp.id, filleted: false, value: 0 });
+      S.seen[f.sp.id] = true;
+      S.caught = (S.caught || 0) + 1;
+      S.caughtEnv[f.sp.env] = (S.caughtEnv[f.sp.env] || 0) + 1;
+    });
+    const boss = caught.find(f => f.sp.boss);
+    if (boss) {
       monsterTimer = 45;
-      if (!instant) setTimeout(() => toast('🦑 You caught the GIANT SQUID! Another one will rise from the deep before long…', 4000), 400);
+      const first = !S.trophies[boss.sp.env];
+      S.trophies[boss.sp.env] = (S.trophies[boss.sp.env] || 0) + 1;
+      if (!instant) setTimeout(() => toast(first
+        ? `🏆 You beat the ${boss.sp.name}, the final fish of the ${ENVS[boss.sp.env].name}! It's in your trophy room now.`
+        : `🏆 You beat the ${boss.sp.name} again! Another one will rise from the deep before long…`, 4500), 400);
     }
+    syncSoon();
     fish = fish.filter(x => !caught.includes(x));
     if (!instant) addFloat(rodTip().x, rodTip().y - 10,
       caught.length > 1 ? `${caught.length} fish in the bucket!` : `${caught[0].sp.name} in the bucket!`, '#ffe680');
@@ -977,6 +1260,7 @@ function update(dt) {
   T += dt;
   msgCooldown -= dt;
   updateRival(dt);
+  updateScenery(dt);
 
   if (!lure.active) {
     let dx = 0;
@@ -1038,7 +1322,7 @@ function update(dt) {
   }
   fish = fish.filter(f => f.hooked || f.home || (f.x > -260 && f.x < W + 260));
   while (unitCount() < targetFishCount()) spawnFish(false);
-  if (!fish.some(f => f.sp.monster)) { monsterTimer -= dt; if (monsterTimer <= 0) spawnMonster(true); }
+  if (!fish.some(f => f.sp.boss)) { monsterTimer -= dt; if (monsterTimer <= 0) spawnMonster(true); }
   inks.forEach(k => { k.life -= dt; k.r += 18 * dt; });
   inks = inks.filter(k => k.life > 0);
   wreckTimer += dt;
@@ -1078,7 +1362,7 @@ function checkHits() {
       updateHud();
     } else {
       f.inv = 0.5; f.flee = 0.8; f.flash = 0.25;
-      if (f.sp.monster) for (let i = 0; i < 6; i++) inks.push({ x: f.x - f.dir * rand(20, 80), y: f.y + rand(-30, 30), r: rand(14, 26), life: rand(1.5, 2.5) });
+      if (f.sp.look.squid) for (let i = 0; i < 6; i++) inks.push({ x: f.x - f.dir * rand(20, 80), y: f.y + rand(-30, 30), r: rand(14, 26), life: rand(1.5, 2.5) });
       addFloat(f.x, f.y - 18, `-${dmg}  (${Math.round(f.hp * 10) / 10} left)`, '#ff9b8a');
       if (!f.wasHit) say(`Strong fish! Hit the ${f.sp.name} ${Math.ceil(f.hp / dmg)} more time${Math.ceil(f.hp / dmg) > 1 ? 's' : ''}!`);
       f.wasHit = true;
@@ -1093,13 +1377,14 @@ function draw() {
   ctx.save();
   ctx.translate(0, -camY);
 
+  const E = ENV();
   if (top < SURF) {
     let g = ctx.createLinearGradient(0, 0, 0, SURF);
-    g.addColorStop(0, '#5db6ea'); g.addColorStop(1, '#bfe7fb');
+    g.addColorStop(0, E.sky[0]); g.addColorStop(1, E.sky[1]);
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, SURF);
-    ctx.fillStyle = 'rgba(255,230,128,.35)'; ctx.beginPath(); ctx.arc(90, 50, 46, 0, 7); ctx.fill();
-    ctx.fillStyle = '#ffe680'; ctx.beginPath(); ctx.arc(90, 50, 28, 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.globalAlpha = 0.35; ctx.fillStyle = E.sun; ctx.beginPath(); ctx.arc(90, 50, 46, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(90, 50, 28, 0, 7); ctx.fill();
+    ctx.fillStyle = env() === 'swamp' ? 'rgba(235,235,210,.55)' : 'rgba(255,255,255,.9)';
     clouds.forEach(c => {
       ctx.save(); ctx.translate(c.x, c.y); ctx.scale(c.s, c.s);
       ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.arc(18, -6, 20, 0, 7); ctx.arc(38, 0, 15, 0, 7); ctx.fill();
@@ -1108,18 +1393,18 @@ function draw() {
   }
 
   const g = ctx.createLinearGradient(0, SURF, 0, WORLD_H);
-  g.addColorStop(0, '#2f8fd0'); g.addColorStop(0.08, '#1d5f9a'); g.addColorStop(0.25, '#123d6a');
-  g.addColorStop(0.45, '#0a2547'); g.addColorStop(0.7, '#051429'); g.addColorStop(1, '#020a16');
+  [0, 0.05, 0.16, 0.32, 0.6, 1].forEach((stop, i) => g.addColorStop(stop, E.water[i]));
   ctx.fillStyle = g; ctx.fillRect(0, Math.max(SURF, top), W, bottom - Math.max(SURF, top) + 40);
 
   if (top < SURF + 600) {
-    ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = '#fff';
+    ctx.save(); ctx.globalAlpha = E.rays; ctx.fillStyle = '#fff';
     for (let i = 0; i < 6; i++) {
       const x = (i * 190 + Math.sin(T * 0.3 + i) * 30) % (W + 200) - 100;
       ctx.beginPath(); ctx.moveTo(x, SURF); ctx.lineTo(x + 60, SURF); ctx.lineTo(x + 220, SURF + 560); ctx.lineTo(x + 120, SURF + 560); ctx.fill();
     }
     ctx.restore();
   }
+  drawEnvUnderwater(top, bottom);
 
   ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.font = '12px sans-serif'; ctx.textAlign = 'right';
   for (let d = 100; d < SEA_DEPTH; d += 100) {
@@ -1131,13 +1416,13 @@ function draw() {
 
   if (bottom > WORLD_H - 260) {
     wrecks.forEach(drawWreck);
-    ctx.fillStyle = '#2a2318';
+    ctx.fillStyle = E.floor;
     ctx.beginPath(); ctx.moveTo(0, WORLD_H + 40);
     for (let x = 0; x <= W; x += 30) ctx.lineTo(x, WORLD_H - 10 - Math.sin(x * 0.017) * 9 - Math.sin(x * 0.05) * 4);
     ctx.lineTo(W, WORLD_H + 40); ctx.fill();
-    ctx.fillStyle = '#3a3122';
+    ctx.fillStyle = E.rock;
     for (let i = 0; i < 9; i++) { ctx.beginPath(); ctx.ellipse(40 + i * 113, WORLD_H - 6, 18 + (i % 3) * 8, 9, 0, 0, 7); ctx.fill(); }
-    ctx.strokeStyle = '#1a4a2c'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.strokeStyle = E.weed; ctx.lineWidth = 5; ctx.lineCap = 'round';
     for (let i = 0; i < 14; i++) {
       const x = 30 + i * 68, h = 40 + (i * 37) % 60;
       ctx.beginPath(); ctx.moveTo(x, WORLD_H - 8);
@@ -1189,13 +1474,14 @@ function draw() {
   }
 
   if (top < SURF + 40) {
+    drawEnvSurface();
     drawRival();
     drawBoat();
     drawPlayer();
-    ctx.fillStyle = 'rgba(47,143,208,.55)';
+    ctx.globalAlpha = 0.6; ctx.fillStyle = E.water[0];
     ctx.beginPath(); ctx.moveTo(0, SURF + 14);
     for (let x = 0; x <= W; x += 10) ctx.lineTo(x, SURF + Math.sin(x * 0.03 + T * 2) * 3);
-    ctx.lineTo(W, SURF + 14); ctx.fill();
+    ctx.lineTo(W, SURF + 14); ctx.fill(); ctx.globalAlpha = 1;
     ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2;
     ctx.beginPath();
     for (let x = 0; x <= W; x += 10) { const y = SURF + Math.sin(x * 0.03 + T * 2) * 3; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
@@ -1239,6 +1525,95 @@ function draw() {
     ctx.fillRect(12, 12, 176, 30);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(`⬇ ${m} m  (max ${maxM} m)`, 22, 33);
+  }
+}
+
+// ---------------- scenery for each place ----------------
+let bergs = [], snow = [], lilies = [];
+const SWAMP_TREES = [{ x: 30, w: 46 }, { x: 150, w: 34 }, { x: 255, w: 24 }, { x: 880, w: 40 }, { x: 960, w: 52 }];
+function setupScenery() {
+  bergs = []; snow = []; lilies = [];
+  if (env() === 'arctic') {
+    bergs = [
+      { x: rand(70, 230), w: rand(110, 150), h: rand(45, 70), d: rand(200, 300), v: rand(-3, 3) },
+      { x: rand(800, 920), w: rand(90, 130), h: rand(35, 60), d: rand(160, 260), v: rand(-3, 3) },
+      { x: rand(320, 360), w: 46, h: 10, d: 30, v: rand(-4, 4), floe: true },
+    ];
+    snow = Array.from({ length: 60 }, () => ({ x: rand(0, W), y: rand(0, SURF), v: rand(12, 30), s: rand(1, 2.5) }));
+  }
+  if (env() === 'swamp') lilies = Array.from({ length: 9 }, (_, i) => ({ x: [40, 90, 210, 290, 330, 790, 850, 905, 940][i] + rand(-10, 10), r: rand(9, 15), a: rand(0, 6) }));
+}
+function updateScenery(dt) {
+  bergs.forEach(b => { b.x += b.v * dt; if (b.x < 40 || b.x > W - 40) b.v *= -1; if (!b.floe && b.x > 280 && b.x < 760) b.v = b.x < 520 ? -Math.abs(b.v) : Math.abs(b.v); });
+  snow.forEach(f => { f.y += f.v * dt; f.x += Math.sin(T + f.y * 0.05) * 0.3; if (f.y > SURF) { f.y = -5; f.x = rand(0, W); } });
+}
+function drawEnvUnderwater(top, bottom) {
+  if (top > SURF + 320) return;
+  if (env() === 'arctic') {
+    bergs.forEach(b => {   // the big hidden part of each iceberg
+      const g = ctx.createLinearGradient(0, SURF, 0, SURF + b.d);
+      g.addColorStop(0, 'rgba(210,240,250,.75)'); g.addColorStop(1, 'rgba(160,210,235,.15)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(b.x - b.w * 0.75, SURF);
+      ctx.lineTo(b.x - b.w * 0.95, SURF + b.d * 0.35); ctx.lineTo(b.x - b.w * 0.5, SURF + b.d * 0.8);
+      ctx.lineTo(b.x + b.w * 0.1, SURF + b.d); ctx.lineTo(b.x + b.w * 0.85, SURF + b.d * 0.6);
+      ctx.lineTo(b.x + b.w * 0.8, SURF + b.d * 0.2); ctx.lineTo(b.x + b.w * 0.7, SURF); ctx.closePath(); ctx.fill();
+    });
+  }
+  if (env() === 'swamp') {
+    // tangled cypress roots reaching down into the water
+    ctx.strokeStyle = 'rgba(58,42,24,.9)'; ctx.lineCap = 'round';
+    SWAMP_TREES.forEach((t, i) => {
+      for (let k = 0; k < 5; k++) {
+        const dir = (k % 2 ? 1 : -1), len = 80 + ((i * 37 + k * 53) % 160);
+        ctx.lineWidth = Math.max(2, t.w * 0.18 - k);
+        ctx.beginPath(); ctx.moveTo(t.x + dir * k * 4, SURF);
+        ctx.bezierCurveTo(t.x + dir * (20 + k * 9), SURF + len * 0.3, t.x - dir * (10 + k * 6), SURF + len * 0.65, t.x + dir * (30 + k * 12), SURF + len);
+        ctx.stroke();
+      }
+    });
+    // floating murk
+    ctx.fillStyle = 'rgba(160,170,90,.12)';
+    for (let i = 0; i < 40; i++) { const x = (i * 97 + T * 6) % W, y = SURF + 20 + (i * 53) % 300; ctx.beginPath(); ctx.arc(x, y, 1.5 + (i % 3), 0, 7); ctx.fill(); }
+  }
+}
+function drawEnvSurface() {
+  if (env() === 'arctic') {
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    snow.forEach(f => { ctx.beginPath(); ctx.arc(f.x, f.y, f.s, 0, 7); ctx.fill(); });
+    bergs.forEach(b => {   // the tip of each iceberg above the water
+      ctx.fillStyle = '#f4fbff';
+      ctx.beginPath(); ctx.moveTo(b.x - b.w * 0.7, SURF + 2);
+      if (b.floe) { ctx.lineTo(b.x - b.w * 0.6, SURF - b.h); ctx.lineTo(b.x + b.w * 0.6, SURF - b.h); }
+      else { ctx.lineTo(b.x - b.w * 0.45, SURF - b.h * 0.55); ctx.lineTo(b.x - b.w * 0.1, SURF - b.h); ctx.lineTo(b.x + b.w * 0.2, SURF - b.h * 0.7); ctx.lineTo(b.x + b.w * 0.45, SURF - b.h * 0.85); }
+      ctx.lineTo(b.x + b.w * 0.68, SURF + 2); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(150,200,225,.55)';
+      ctx.beginPath(); ctx.moveTo(b.x + b.w * 0.05, SURF + 2); ctx.lineTo(b.x + b.w * 0.2, SURF - b.h * 0.65); ctx.lineTo(b.x + b.w * 0.45, SURF - b.h * 0.8); ctx.lineTo(b.x + b.w * 0.68, SURF + 2); ctx.closePath(); ctx.fill();
+    });
+  }
+  if (env() === 'swamp') {
+    SWAMP_TREES.forEach((t, i) => {
+      // trunk flaring out at the waterline, with hanging moss
+      ctx.fillStyle = '#4a3622';
+      ctx.beginPath(); ctx.moveTo(t.x - t.w * 0.35, -10); ctx.lineTo(t.x + t.w * 0.35, -10);
+      ctx.quadraticCurveTo(t.x + t.w * 0.4, SURF - 30, t.x + t.w * 1.1, SURF + 4); ctx.lineTo(t.x - t.w * 1.1, SURF + 4);
+      ctx.quadraticCurveTo(t.x - t.w * 0.4, SURF - 30, t.x - t.w * 0.35, -10); ctx.fill();
+      ctx.strokeStyle = 'rgba(30,20,10,.4)'; ctx.lineWidth = 2;
+      for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(t.x + k * t.w * 0.18, 0); ctx.lineTo(t.x + k * t.w * 0.3, SURF - 10); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(150,160,120,.75)'; ctx.lineWidth = 2;
+      for (let k = 0; k < 4; k++) {
+        const mx = t.x + (k - 1.5) * t.w * 0.5, ml = 25 + ((i + k) * 17) % 35;
+        ctx.beginPath(); ctx.moveTo(mx, 5 + k * 6); ctx.quadraticCurveTo(mx + Math.sin(T + k) * 5, 5 + ml / 2, mx + Math.sin(T * 0.8 + k) * 3, 5 + ml); ctx.stroke();
+      }
+      // cypress knees poking out of the water
+      ctx.fillStyle = '#5a4329';
+      [[-1.6, 14], [1.7, 10]].forEach(([dx, kh]) => { ctx.beginPath(); ctx.moveTo(t.x + dx * t.w - 5, SURF + 3); ctx.quadraticCurveTo(t.x + dx * t.w, SURF - kh * 2, t.x + dx * t.w + 5, SURF + 3); ctx.fill(); });
+    });
+    lilies.forEach(l => {
+      ctx.fillStyle = '#4f7d33';
+      ctx.beginPath(); ctx.ellipse(l.x, SURF + 1, l.r, l.r * 0.35, 0, l.a, l.a + Math.PI * 1.8); ctx.lineTo(l.x, SURF + 1); ctx.fill();
+      if (l.r > 13) { ctx.fillStyle = '#f2d4e4'; ctx.beginPath(); ctx.arc(l.x + 2, SURF - 3, 3.5, 0, 7); ctx.fill(); }
+    });
   }
 }
 
@@ -1428,7 +1803,7 @@ let rival = null, rivalTimer = 0;
 function spawnRival() {
   const roll = Math.random();
   const t = clamp(tier() + (roll < 0.5 ? 0 : roll < 0.8 ? 1 : -1), 0, BOATS.length - 1);
-  const pool = SPECIES.filter(s => !s.wreck && !s.monster && s.tier <= t);
+  const pool = SPECIES.filter(s => s.env === env() && !s.wreck && !s.boss && s.tier <= t);
   const n = Math.round(rand(2, 3 + t));
   const fishIds = Array.from({ length: n }, () => pool[Math.min(pool.length - 1, Math.floor(pool.length * Math.sqrt(Math.random())))].id);
   const dir = Math.random() < 0.5 ? 1 : -1;
@@ -1798,7 +2173,10 @@ function nextFilletFish() {
     return;
   }
   fillet = { item, sp: speciesById(item.id), chops: 0, cuts: [], done: false };
-  $('filletFact').innerHTML = `<b>🐟 Did you know?</b> ${fillet.sp.fact}`;
+  // a different fact each time you fillet the same kind of fish
+  const n = S.factIdx[fillet.sp.id] || 0;
+  S.factIdx[fillet.sp.id] = n + 1;
+  $('filletFact').innerHTML = `<b>🐟 Did you know? (${(n % fillet.sp.facts.length) + 1}/${fillet.sp.facts.length})</b> ${fillet.sp.facts[n % fillet.sp.facts.length]}`;
   $('filletFact').classList.remove('hidden');
   const k = G().knife;
   const raw = S.bucket.filter(f => !f.filleted).length;
@@ -1990,4 +2368,6 @@ $('filletClose').onclick = closeFillet;
 //  START
 // ======================================================================
 renderDock();
+loadLeaderboard();
+syncSoon();
 })();

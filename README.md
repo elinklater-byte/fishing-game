@@ -6,10 +6,10 @@ A browser fishing game. Start on the dock with 100 coins, buy a Tiny Raft, a Rus
 - Your slack (line length) limits how far the lure can go. Deeper fish are worth more.
 - Strong fish take several hits before they're hooked. They keep swimming the same way when hit.
 - Now and then (1 spawn in 8), herring, mackerel, striped bass, tuna or amberjack arrive as a **school**.
-- All 16 fish are real ocean species, from Atlantic herring to the coelacanth. You learn a **fish fact** about each one at the fillet station.
-- The ocean is 250 m deep and gets darker as you go. Dive straight down fast and fish can't bite, which gets you past the small ones.
+- Fish in three places, each with its own water and real fish: the **Ocean** (open blue sea and shipwrecks), the **Arctic** (icebergs and icy water), and the **Swamp** (murky green water and cypress roots). There are 55 real species, and each one has 3 facts. You learn a different one each time you fillet that fish.
+- The water is 500 m deep and gets darker as you go. Dive straight down fast and fish can't bite, which gets you past the small ones.
 - Some trips have a rare **shipwreck** on the sea floor, home to the Goliath Grouper.
-- One **Giant Squid** lives at the very bottom. It takes a lot of hits (and squirts ink), and a new one comes back a while after you catch it.
+- Every place has a **final fish** at the very bottom: the Giant Squid (Ocean), the Greenland Shark (Arctic) and the Alligator Gar (Swamp). Catch one to put it in your **Trophy Room**. A new one comes back a while later.
 - Walk to the **right side** of the boat to fillet: drag the knife across each fish. The speed meter has three zones: **green** cuts pay 100%, **yellow** 70%, and **red** 40% (and the fish bleeds). The fillet is worth the average of your cuts.
 - **Bait** and **cannonballs** are sold at the market in packs of 10. Every cast uses 1 bait; every cannon shot uses 1 cannonball.
 - Sail back to the dock, sell your fillets, and upgrade your rod, lure, slack, knife and bucket (6 levels each per boat).
@@ -22,4 +22,10 @@ There are 7 boats: Tiny Raft, Rowboat, Skiff, Fishing Boat, Trawler, Research Ve
 
 Controls: ◀ ▶ / A D / arrow keys to walk · click water to cast · move mouse to steer · Space to reel in · F to fillet.
 
-Plain HTML/CSS/JS, no build step. Progress saves in your browser.
+## Leaderboards
+
+Pick a username at the dock to show up on the online leaderboards: most money earned, most fish caught, and most fish caught in each place. A crown 👑 next to a name means that player beat a final fish. Your username is claimed by a secret key saved in your browser, so nobody else can post under your name.
+
+The leaderboard lives in `api/leaderboard.js`, a Vercel Function that stores each player as a small JSON file in a private Vercel Blob store (`BLOB_READ_WRITE_TOKEN`).
+
+Plain HTML/CSS/JS for the game, no build step. Fish and places are in `fishdata.js`. Progress saves in your browser.

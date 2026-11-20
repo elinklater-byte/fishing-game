@@ -31,12 +31,19 @@
 
       <div class="card">
         <h2>⚓ Set Sail</h2>
+        <p class="muted small-label">Where do you want to fish?</p>
+        <div id="envPicker" class="env-picker"></div>
         <p id="sailNote" class="muted"></p>
         <button id="sailBtn" class="btn blue huge">Head out to the ocean ⛵</button>
       </div>
 
       <div class="card">
-        <h2>📖 Fish Guide</h2>
+        <h2>🏆 Trophy Room</h2>
+        <div id="trophies" class="trophies"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="guideTitle">📖 Fish Guide</h2>
         <div id="fishGuide" class="guide"></div>
       </div>
     </div>
@@ -45,6 +52,13 @@
       <div class="card">
         <h2 id="shopTitle">🛒 Bait &amp; Tackle Shop</h2>
         <div id="shop" class="shop"></div>
+      </div>
+
+      <div class="card" id="lbCard">
+        <h2>🏆 Leaderboards</h2>
+        <div id="lbUser" class="lb-user"></div>
+        <div id="lbTabs" class="lb-tabs"></div>
+        <div id="lbList" class="lb-list"></div>
       </div>
       <button id="resetBtn" class="btn tiny ghost">Start a new game</button>
     </div>
@@ -110,6 +124,7 @@
 
 <div id="toast" class="toast hidden"></div>
 
+<script src="fishdata.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
