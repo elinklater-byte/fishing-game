@@ -197,3 +197,50 @@ body {
   .fact b { font-size: 12px; }
   .btn { font-size: 14px; padding: 8px 12px; }
 }
+
+/* ---------- new world questions ---------- */
+#setup { z-index: 30; }
+.setup-panel { width: min(540px, 100%); }
+.setup-q { font-size: 20px; font-weight: 800; margin: 10px 0 14px; }
+.setup-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.choice {
+  font: inherit; border: 3px solid #c99b62; background: #fff; border-radius: 16px; padding: 16px 10px;
+  cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 44px; color: #13314d;
+  touch-action: manipulation;
+}
+.choice span { font-size: 44px; }
+.choice b { font-size: 18px; }
+.choice small { color: #5d6b78; font-size: 13px; }
+.choice:hover, .choice:focus-visible { border-color: #2a74c9; outline: none; box-shadow: 0 0 0 3px rgba(42,116,201,.25); }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- phone & iPad controls ---------- */
+#filletCanvas, #battleCanvas { touch-action: none; }
+.action-pad, .rotate-tip { display: none; }
+body.desktop .walk-pad { display: none; }
+body.touch { overscroll-behavior: none; }
+body.touch #sea { padding-bottom: 0; }
+body.touch .hud { padding: 6px 8px; gap: 6px; }
+body.touch .hud .pill { padding: 4px 9px; font-size: 14px; }
+body.touch .hud .coins { padding: 4px 10px; font-size: 14px; }
+body.touch .pill.gear, body.touch #reelBtn, body.touch #filletBtn, body.touch #attackBtn { display: none !important; }
+body.touch #dockBtn { font-size: 14px; padding: 8px 10px; }
+body.touch .stage { max-width: min(100vw, calc((100dvh - 56px) * 960 / 760)); }
+body.touch .walk-pad { top: auto; right: auto; left: 10px; bottom: 10px; gap: 10px; }
+body.touch .walk { width: 66px; height: 66px; font-size: 26px; touch-action: none; }
+body.touch .action-pad { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 10px; align-items: flex-end; }
+.act {
+  width: 64px; height: 64px; border-radius: 50%; border: none; font-size: 28px; cursor: pointer;
+  background: rgba(255,255,255,.9); color: #13314d; box-shadow: 0 4px 0 rgba(0,0,0,.3);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; touch-action: manipulation;
+}
+.act:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.3); }
+.act small { font: 700 11px "Trebuchet MS", system-ui, sans-serif; margin-top: 2px; }
+.act.cast { width: 88px; height: 88px; font-size: 34px; background: #ffd34d; }
+.act.cast.reel { background: #f2a23a; }
+.rotate-tip {
+  position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); white-space: nowrap;
+  background: rgba(6,24,44,.85); color: #fff; padding: 6px 12px; border-radius: 999px; font-weight: 700; font-size: 13px; pointer-events: none;
+}
+@media (orientation: portrait) and (max-width: 600px) { body.touch .rotate-tip { display: block; } body.touch .hint { margin-top: 52px; } }
+@media (max-height: 500px) { body.touch .act { width: 54px; height: 54px; font-size: 24px; } body.touch .act.cast { width: 72px; height: 72px; } body.touch .walk { width: 54px; height: 54px; } }

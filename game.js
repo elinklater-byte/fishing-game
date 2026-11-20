@@ -94,7 +94,8 @@ const statText = {
 const SAVE_KEY = 'hook-line-sinker-v2';
 function freshState() {
   return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, hooks:0, cannon:0, bait:0, balls:0, bucket:[], seen:{}, earned:0,
-    env:'ocean', caught:0, caughtEnv:{}, trophies:{}, factIdx:{}, username:'', playerKey:'' };
+    env:'ocean', caught:0, caughtEnv:{}, trophies:{}, factIdx:{}, username:'', playerKey:'',
+    gender:'', device:'' };
 }
 function load() {
   try {
@@ -108,6 +109,10 @@ let S = load();
 
 const tier = () => Math.max(0, S.tier);
 const env = () => (ENVS[S.env] ? S.env : 'ocean');
+// fisherman or fisherwoman, from the new-world questions
+const angler = () => (S.gender === 'woman' ? 'fisherwoman' : 'fisherman');
+const Angler = () => (S.gender === 'woman' ? 'Fisherwoman' : 'Fisherman');
+const isTouch = () => S.device === 'touch';
 const ENV = () => ENVS[env()];
 const gIdx = key => tier() * LV_PER_TIER + S.lv[key];
 const gearName = key => `${GEAR[key].names[tier()]} Lv ${S.lv[key] + 1}`;
@@ -662,8 +667,8 @@ function renderDock() {
   const starterDone = S.tier >= 0 && S.hasRod;
 
   $('dockGreeting').textContent = starterDone
-    ? `You're back at Saltwater Dock. Sell your fillets and upgrade your gear!`
-    : `Welcome to Saltwater Dock! You have 100 coins. Buy a Tiny Raft, a Rusty Rod, and a pack of bait at the market to head out.`;
+    ? `Welcome back, ${angler()}${S.username ? ' ' + S.username : ''}! Sell your fillets and upgrade your gear.`
+    : `Welcome to Saltwater Dock, ${angler()}! You have 100 coins. Buy a Tiny Raft, a Rusty Rod, and a pack of bait at the market to head out.`;
 
   const shop = $('shop');
   shop.innerHTML = '';
@@ -937,6 +942,7 @@ async function syncNow() {
     if (r.ok && !$('dock').classList.contains('hidden')) loadLeaderboard();
   } catch (e) { /* offline: try again next time */ }
 }
+const idOf = n => String(n).toLowerCase().replace(/[^a-z0-9]/g, '_');
 async function claimName(name) {
   name = name.trim().replace(/\s+/g, ' ');
   if (!NAME_OK.test(name)) { lbFormMsg = 'Use 3–16 letters, numbers, spaces, - or _.'; renderLeaderboard(); return; }
@@ -946,7 +952,12 @@ async function claimName(name) {
     const r = await fetch('/api/leaderboard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(myStats(name)) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { lbFormMsg = d.error || 'Could not save that name. Try again.'; renderLeaderboard(); return; }
+    const oldName = S.username;
     S.username = d.player.name; save();
+    // changing names frees up the old one so another player can use it
+    if (oldName && idOf(oldName) !== idOf(S.username)) {
+      fetch('/api/leaderboard', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: oldName, key: S.playerKey }) }).catch(() => {});
+    }
     lbEditing = false; lbFormMsg = '';
     toast(`Welcome, ${S.username}! You're on the leaderboard. 🏆`);
     loadLeaderboard();
@@ -956,7 +967,7 @@ function renderLeaderboard() {
   const user = $('lbUser');
   if (!S.username || lbEditing) {
     user.innerHTML = `
-      <p class="muted">${S.username ? 'Pick a new username:' : 'Pick a username so everyone can see your scores!'}</p>
+      <p class="muted">${S.username ? 'Pick a new username. Your scores move to it, and your old name is freed up for other players.' : 'Pick a username so everyone can see your scores! Each name can only be used by one player.'}</p>
       <form class="lb-form" id="lbForm">
         <input id="lbName" maxlength="16" placeholder="Your username" autocomplete="off" value="${esc(lbEditing ? '' : '')}">
         <button class="btn green" type="submit">Save name</button>
@@ -1006,11 +1017,39 @@ $('resetBtn').onclick = () => {
     return;
   }
   clearTimeout(resetArmed); resetArmed = null;
-  b.textContent = 'Start a new game';
+  b.textContent = 'Start a new world';
   const keep = { username: S.username, playerKey: S.playerKey };
   S = Object.assign(freshState(), keep); save(); renderDock();
-  toast('New game! You have 100 coins.');
+  openSetup();
 };
+$('settingsBtn').onclick = () => openSetup();
+
+// ---------------- new world questions ----------------
+function openSetup() {
+  $('setupStep1').classList.remove('hidden');
+  $('setupStep2').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+}
+document.querySelectorAll('#setup [data-gender]').forEach(b => b.onclick = () => {
+  S.gender = b.dataset.gender; save();
+  $('setupHello').textContent = `Nice to meet you, ${angler()}!`;
+  $('setupStep1').classList.add('hidden');
+  $('setupStep2').classList.remove('hidden');
+});
+document.querySelectorAll('#setup [data-device]').forEach(b => b.onclick = () => {
+  S.device = b.dataset.device; save();
+  $('setup').classList.add('hidden');
+  applyDevice();
+  renderDock();
+  toast(isTouch() ? `📱 Phone & iPad controls are on. Let's go fishing, ${angler()}!` : `💻 Computer controls are on. Let's go fishing, ${angler()}!`, 3000);
+});
+function applyDevice() {
+  document.body.classList.toggle('touch', isTouch());
+  document.body.classList.toggle('desktop', !isTouch());
+  $('hint').innerHTML = isTouch()
+    ? 'Tap <b>🎣</b> to walk to the fishing spot and cast, or tap the water. <b>Drag your finger</b> to steer the lure. Tap 🎣 again to reel in. Tap <b>🔪</b> to fillet.'
+    : 'Walk with <b>◀ ▶</b> or the arrow keys. On the <b>left side</b> of the boat, click the water to drop your lure, then move the mouse to steer it. <b>Space</b> reels in. Walk to the <b>right side</b> (or press <b>F</b>) to fillet.';
+}
 
 // ======================================================================
 //  SEA SCREEN
@@ -1065,7 +1104,9 @@ function enterSea() {
     toast(`📡 Sonar ping! A shipwreck is resting on the sea floor (${SEA_DEPTH / PX_PER_M} m)` +
       (canReach ? '. Lots of fish are hiding there!' : '. You need a much longer line to reach it.'), 4200);
   } else {
-    toast(`${ENV().icon} Welcome to the ${ENV().name}! Walk to the left side of your boat to start fishing.`);
+    toast(isTouch()
+      ? `${ENV().icon} Welcome to the ${ENV().name}, ${angler()}! Tap 🎣 to walk over and cast.`
+      : `${ENV().icon} Welcome to the ${ENV().name}, ${angler()}! Walk to the left side of your boat to start fishing.`);
   }
   requestAnimationFrame(loop);
 }
@@ -1173,11 +1214,14 @@ cv.addEventListener('pointerdown', e => {
   if (p.y + camY > SURF) {
     if (lure.active) { if (!lure.reeling) pointerScreen = p; return; }
     if (fishingZone()) cast(p);
-    else { player.targetX = BOAT_X - boatW() / 2 + 10; say('Walk to the LEFT side of the boat to fish!'); }
+    else {
+      player.targetX = BOAT_X - boatW() / 2 + 18;
+      if (isTouch()) pendingCast = true; else say('Walk to the LEFT side of the boat to fish!');
+    }
   } else {
     if (lure.active) { reelIn(); return; }
     if (rivalHit(p)) { openBattle(); return; }
-    player.targetX = clamp(p.x, BOAT_X - boatW() / 2 + 10, BOAT_X + boatW() / 2 - 10);
+    player.targetX = clamp(p.x, BOAT_X - boatW() / 2 + 16, BOAT_X + boatW() / 2 - 16);
   }
 });
 cv.addEventListener('pointermove', e => {
@@ -1209,6 +1253,20 @@ function holdButton(id, key) {
 holdButton('walkL', 'arrowleft');
 holdButton('walkR', 'arrowright');
 $('reelBtn').onclick = () => reelIn();
+// phone / iPad buttons
+let pendingCast = false;
+$('tCast').onclick = () => {
+  if (lure.active) { reelIn(); return; }
+  if (fishingZone()) castDown();
+  else { player.targetX = BOAT_X - boatW() / 2 + 18; pendingCast = true; }   // walk over, then cast
+};
+function castDown() { const tip = rodTip(); cast({ x: tip.x - 30, y: SURF + 90 - camY }); }
+$('tFillet').onclick = () => {
+  if (filletZone()) openFillet();
+  else { player.targetX = BOAT_X + boatW() / 2 - 18; pendingFillet = true; }   // walk over, then fillet
+};
+let pendingFillet = false;
+$('tAttack').onclick = () => openBattle();
 $('dockBtn').onclick = () => leaveSea();
 $('filletBtn').onclick = () => openFillet();
 
@@ -1266,10 +1324,15 @@ function update(dt) {
     let dx = 0;
     if (keys['arrowleft'] || keys['a']) dx -= 1;
     if (keys['arrowright'] || keys['d']) dx += 1;
-    if (dx) { player.targetX = null; player.x += dx * 170 * dt; player.facing = dx; }
+    if (dx) { player.targetX = null; pendingCast = pendingFillet = false; player.x += dx * 170 * dt; player.facing = dx; }
     else if (player.targetX != null) {
       const d = player.targetX - player.x;
-      if (Math.abs(d) < 3) player.targetX = null;
+      if (Math.abs(d) < 3) {
+        player.targetX = null;
+        if (pendingCast && fishingZone()) castDown();
+        if (pendingFillet && filletZone()) openFillet();
+        pendingCast = pendingFillet = false;
+      }
       else { player.x += Math.sign(d) * Math.min(Math.abs(d), 170 * dt); player.facing = Math.sign(d); }
     }
     player.x = clamp(player.x, BOAT_X - boatW() / 2 + 14, BOAT_X + boatW() / 2 - 14);
@@ -1733,8 +1796,17 @@ function drawPlayer() {
   ctx.moveTo(x + 3, y - 22); ctx.lineTo(x + 4 - step, y); ctx.stroke();
   ctx.fillStyle = '#f2c230';
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - 10, y - 50, 20, 30, 6) : ctx.rect(x - 10, y - 50, 20, 30); ctx.fill();
-  ctx.fillStyle = '#f1c9a5'; ctx.beginPath(); ctx.arc(x, y - 59, 9, 0, 7); ctx.fill();
+  if (S.gender === 'woman') {   // ponytail
+    ctx.fillStyle = '#7a4a22';
+    ctx.beginPath(); ctx.arc(x, y - 60, 10, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x - f * 12, y - 52 + Math.sin(T * 4) * 1.5, 5, 10, f * 0.5, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = '#f1c9a5'; ctx.beginPath(); ctx.arc(x + f * 1.5, y - 59, 8.5, 0, 7); ctx.fill();
   ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(x + f * 4, y - 60, 1.5, 0, 7); ctx.fill();
+  if (S.gender !== 'woman') {   // a little beard
+    ctx.fillStyle = '#7a4a22';
+    ctx.beginPath(); ctx.arc(x + f * 2, y - 54, 5, 0, Math.PI); ctx.fill();
+  }
   ctx.fillStyle = '#e0a910';
   ctx.beginPath(); ctx.ellipse(x, y - 66, 14, 4, 0, 0, 7); ctx.fill();
   ctx.beginPath(); ctx.arc(x, y - 67, 8, Math.PI, 0); ctx.fill();
@@ -1772,7 +1844,7 @@ let lastHudKey = '';
 function updateHudLive(force) {
   const cap = G().cap, n = S.bucket.length;
   const raw = S.bucket.some(f => !f.filleted);
-  const key = [n, cap, lure.active, lure.reeling, filletZone(), raw, !!rivalVisible()].join();
+  const key = [n, cap, lure.active, lure.reeling, filletZone(), fishingZone(), raw, !!rivalVisible()].join();
   if (key === lastHudKey && !force) return;
   lastHudKey = key;
   const pill = $('bucketPill');
@@ -1781,6 +1853,12 @@ function updateHudLive(force) {
   $('reelBtn').classList.toggle('hidden', !lure.active || lure.reeling);
   $('filletBtn').classList.toggle('hidden', !(filletZone() && raw && !lure.active));
   $('attackBtn').classList.toggle('hidden', !(rivalVisible() && S.cannon && !lure.active));
+  // phone / iPad buttons
+  const castBtn = $('tCast');
+  castBtn.innerHTML = lure.active ? (lure.reeling ? '⏳<small>Reeling</small>' : '🎣<small>Reel in</small>') : '🎣<small>Cast</small>';
+  castBtn.classList.toggle('reel', lure.active);
+  $('tFillet').classList.toggle('hidden', !(raw && !lure.active));
+  $('tAttack').classList.toggle('hidden', !(rivalVisible() && S.cannon && !lure.active));
 }
 
 function loop(now) {
@@ -1935,7 +2013,7 @@ function endBattle(won) {
     taken.forEach(id => { S.bucket.push({ id, filleted: false, value: 0 }); S.seen[id] = true; });
     const loot = Math.round(st.value * 0.1);
     S.coins += loot;
-    msg = `🏴‍☠️ You beat ${r.name}! You stole ${taken.length} fish and 🪙 ${fmt(loot)}.` +
+    msg = `🏴‍☠️ Nice shooting, ${angler()}! You beat ${r.name} and stole ${taken.length} fish and 🪙 ${fmt(loot)}.` +
       (taken.length < r.fish.length ? ` Your bucket was too full for ${r.fish.length - taken.length} more.` : '');
   } else {
     const lostCoins = Math.floor(S.coins * 0.25);
@@ -2367,7 +2445,9 @@ $('filletClose').onclick = closeFillet;
 // ======================================================================
 //  START
 // ======================================================================
+applyDevice();
 renderDock();
 loadLeaderboard();
 syncSoon();
+if (!S.gender || !S.device) openSetup();
 })();

@@ -20,11 +20,15 @@ A browser fishing game. Start on the dock with 100 coins, buy a Tiny Raft, a Rus
 
 There are 7 boats: Tiny Raft, Rowboat, Skiff, Fishing Boat, Trawler, Research Vessel and Deep-Sea Explorer. Buy the next boat whenever you can afford it. It unlocks new fish, gives your hull more HP for battles, and moves your gear to Lv 1 of a **stronger set** (e.g. Rusty Rod → Bamboo Rod), which is at least as good as your best gear before. Multi-Hook and Cannon upgrades are kept.
 
-Controls: ◀ ▶ / A D / arrow keys to walk · click water to cast · move mouse to steer · Space to reel in · F to fillet.
+When you start a new world, the game asks two questions: are you a man or a woman (you become a **fisherman** or **fisherwoman**), and are you playing on a **phone/iPad** or a **computer**. You can change these any time with ⚙️ Player settings at the dock.
+
+Computer controls: ◀ ▶ / A D / arrow keys to walk · click water to cast · move mouse to steer · Space to reel in · F to fillet.
+
+Phone / iPad controls: big ◀ ▶ buttons to walk · tap 🎣 to walk to the fishing spot and cast (or tap the water) · drag your finger to steer · tap 🎣 again to reel in · tap 🔪 to fillet and 💣 to attack. Landscape works best on a phone.
 
 ## Leaderboards
 
-Pick a username at the dock to show up on the online leaderboards: most money earned, most fish caught, and most fish caught in each place. A crown 👑 next to a name means that player beat a final fish. Your username is claimed by a secret key saved in your browser, so nobody else can post under your name.
+Pick a username at the dock to show up on the online leaderboards: most money earned, most fish caught, and most fish caught in each place. A crown 👑 next to a name means that player beat a final fish. Each username can only be used by one player: it's claimed by a secret key saved in your browser. If you change your name, your scores move to the new one and the old name is freed up for someone else.
 
 The leaderboard lives in `api/leaderboard.js`, a Vercel Function that stores each player as a small JSON file in a private Vercel Blob store (`BLOB_READ_WRITE_TOKEN`).
 

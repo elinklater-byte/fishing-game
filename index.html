@@ -60,7 +60,10 @@
         <div id="lbTabs" class="lb-tabs"></div>
         <div id="lbList" class="lb-list"></div>
       </div>
-      <button id="resetBtn" class="btn tiny ghost">Start a new game</button>
+      <div class="row-btns">
+        <button id="settingsBtn" class="btn tiny ghost">⚙️ Player settings</button>
+        <button id="resetBtn" class="btn tiny ghost">Start a new world</button>
+      </div>
     </div>
   </main>
 </section>
@@ -81,9 +84,16 @@
   <div class="stage">
     <canvas id="game" width="960" height="760"></canvas>
     <div class="walk-pad">
-      <button class="walk" id="walkL">◀</button>
-      <button class="walk" id="walkR">▶</button>
+      <button class="walk" id="walkL" aria-label="Walk left">◀</button>
+      <button class="walk" id="walkR" aria-label="Walk right">▶</button>
     </div>
+    <!-- big buttons for phones and iPads -->
+    <div class="action-pad">
+      <button class="act" id="tAttack" aria-label="Attack">💣</button>
+      <button class="act" id="tFillet" aria-label="Fillet">🔪</button>
+      <button class="act cast" id="tCast" aria-label="Cast">🎣<small>Cast</small></button>
+    </div>
+    <div class="rotate-tip" id="rotateTip">📱 Turn your phone sideways for a bigger view!</div>
   </div>
   <p class="hint" id="hint">Walk to the <b>left side</b> of the boat to fish. Click the water to drop your lure, then move the mouse to steer it into fish. Steer deeper to dive the camera down (fish can’t bite while it’s sinking fast). The deep is dark, and your lure is your only light. Walk to the <b>right side</b> to fillet.</p>
 </section>
@@ -118,6 +128,28 @@
     </div>
     <div class="row hidden" id="battleEnd">
       <button id="battleClose" class="btn blue huge">Back to fishing</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NEW WORLD QUESTIONS ============ -->
+<div id="setup" class="overlay hidden">
+  <div class="panel setup-panel">
+    <div id="setupStep1">
+      <h2>🎣 Welcome, new angler!</h2>
+      <p class="setup-q">Are you a man or a woman?</p>
+      <div class="setup-choices">
+        <button class="choice" data-gender="man"><span>👨</span><b>Man</b><small>You'll be a fisherman</small></button>
+        <button class="choice" data-gender="woman"><span>👩</span><b>Woman</b><small>You'll be a fisherwoman</small></button>
+      </div>
+    </div>
+    <div id="setupStep2" class="hidden">
+      <h2 id="setupHello">Nice to meet you!</h2>
+      <p class="setup-q">What are you playing on?</p>
+      <div class="setup-choices">
+        <button class="choice" data-device="touch"><span>📱</span><b>Phone or iPad</b><small>Big buttons, tap and drag with your finger</small></button>
+        <button class="choice" data-device="desktop"><span>💻</span><b>Computer</b><small>Mouse and keyboard</small></button>
+      </div>
     </div>
   </div>
 </div>
