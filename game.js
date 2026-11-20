@@ -2,92 +2,120 @@
 'use strict';
 
 // ======================================================================
-//  DATA
+//  WORLD
 // ======================================================================
 const W = 960, H = 760, SURF = 130;          // view size and water line
 const PX_PER_M = 10;                          // 10px of depth = 1 metre
-const SEA_DEPTH = 1900;                       // sea floor is 190 m down, far below the screen
-const WORLD_H = SURF + SEA_DEPTH;             // bottom of the world (sea floor)
+const SEA_DEPTH = 2500;                       // sea floor is 250 m down
+const WORLD_H = SURF + SEA_DEPTH;
 const WRECK_CHANCE = 0.3;                     // chance a trip has a shipwreck
+const LV_PER_TIER = 4;                        // gear levels per boat
 
-// Deeper fish are worth more and take more hits.  `boat` = boat level needed.
-// `cut` = the knife speed range (px/sec) that gives a clean fillet cut.
+// ======================================================================
+//  FISH — all real ocean species.  depth in px (10px = 1 m)
+//  tier = boat needed · cut = best knife speed · school = [min,max] group size
+// ======================================================================
 const SPECIES = [
-  { id:'sardine',   name:'Sardine',       min:15,   max:110,  value:4,    hp:1,  size:12, speed:75,  color:'#9fb3c8', belly:'#eef3f7', boat:0, weight:10, cut:[200,550] },
-  { id:'bluegill',  name:'Bluegill',      min:50,   max:170,  value:8,    hp:1,  size:15, speed:55,  color:'#3f86bf', belly:'#f2c46d', boat:0, weight:8,  cut:[250,600] },
-  { id:'mackerel',  name:'Mackerel',      min:130,  max:280,  value:16,   hp:2,  size:18, speed:85,  color:'#2f7a68', belly:'#dfe9e4', boat:0, weight:7,  cut:[400,750], stripes:true },
-  { id:'snapper',   name:'Red Snapper',   min:230,  max:400,  value:30,   hp:3,  size:21, speed:60,  color:'#d9534f', belly:'#f6b8a8', boat:0, weight:6,  cut:[500,850] },
-  { id:'grouper',   name:'Grouper',       min:350,  max:560,  value:50,   hp:5,  size:26, speed:42,  color:'#7a6a4f', belly:'#c9b88f', boat:0, weight:5,  cut:[300,600], spots:true },
-  { id:'tuna',      name:'Bluefin Tuna',  min:500,  max:760,  value:90,   hp:7,  size:28, speed:95,  color:'#1f3f73', belly:'#c8d4e6', boat:1, weight:5,  cut:[700,1050] },
-  { id:'swordfish', name:'Swordfish',     min:680,  max:950,  value:150,  hp:9,  size:28, speed:85,  color:'#4b5d8a', belly:'#cfd8ea', boat:1, weight:4,  cut:[850,1200], kind:'sword' },
-  { id:'hammer',    name:'Hammerhead',    min:880,  max:1200, value:260,  hp:12, size:34, speed:65,  color:'#6b7b86', belly:'#d5dde2', boat:2, weight:4,  cut:[600,900], kind:'hammer' },
-  { id:'angler',    name:'Anglerfish',    min:1150, max:1500, value:400,  hp:15, size:24, speed:35,  color:'#3b2a3f', belly:'#5b4a5f', boat:2, weight:3,  cut:[250,480], kind:'angler' },
-  { id:'marlin',    name:'Golden Marlin', min:1450, max:1800, value:700,  hp:20, size:32, speed:105, color:'#e8b923', belly:'#fff1b8', boat:3, weight:2.5, cut:[1000,1350], kind:'sword', gold:true },
-  // only lives around shipwrecks on the sea floor
-  { id:'treasure',  name:'Treasure Fish', min:1780, max:1870, value:1200, hp:25, size:26, speed:50,  color:'#b8862b', belly:'#ffe9a8', boat:0, weight:0,  cut:[450,700], spots:true, gold:true, wreck:true },
+  { id:'herring', name:'Atlantic Herring', min:15, max:140, value:8, hp:1, size:14, speed:80, tier:0, weight:10, cut:350, school:[7,12],
+    look:{ h:.25, tail:'fork', back:'#2d5f80', side:'#c3d2dc', belly:'#f3f6f8', fin:'#8fa6b5' },
+    fact:'Atlantic herring swim in schools that can contain millions of fish.' },
+  { id:'mackerel', name:'Atlantic Mackerel', min:60, max:240, value:15, hp:1, size:17, speed:90, tier:0, weight:9, cut:450, school:[5,9],
+    look:{ h:.22, tail:'fork', back:'#1d6a5b', side:'#cfe0db', belly:'#f4f7f6', fin:'#6b8f86', pattern:'wavy', finlets:'#6b8f86' },
+    fact:'Mackerel have no swim bladder, so they must keep swimming or they slowly sink.' },
+  { id:'bass', name:'Striped Bass', min:160, max:340, value:30, hp:2, size:21, speed:60, tier:0, weight:7, cut:500, school:[3,5],
+    look:{ h:.3, tail:'fork', back:'#4b5b4a', side:'#d6dace', belly:'#f1f2ec', fin:'#7d8577', pattern:'stripes', dorsal:'two' },
+    fact:'Striped bass live in the ocean but swim up rivers into fresh water to lay their eggs.' },
+  { id:'snapper', name:'Red Snapper', min:260, max:430, value:55, hp:2, size:21, speed:55, tier:0, weight:6, cut:600,
+    look:{ h:.42, tail:'fork', back:'#c8352d', side:'#e5675a', belly:'#f8c3b4', fin:'#d04a3f', dorsal:'spiny', eye:'#d93a2b' },
+    fact:'Red snapper can live for more than 50 years.' },
+  { id:'mahi', name:'Mahi-Mahi', min:380, max:600, value:80, hp:4, size:28, speed:90, tier:1, weight:6, cut:700,
+    look:{ h:.32, tail:'fork', back:'#13866d', side:'#e3c02a', belly:'#f3e7a0', fin:'#1a7fa8', pattern:'bluespots', dorsal:'long', blunt:1 },
+    fact:'Mahi-mahi grow incredibly fast and rarely live longer than about 5 years.' },
+  { id:'yellowfin', name:'Yellowfin Tuna', min:520, max:790, value:130, hp:6, size:30, speed:110, tier:1, weight:6, cut:800, school:[3,5],
+    look:{ h:.3, tail:'lunate', back:'#17305a', side:'#94a4b8', belly:'#e8edf3', fin:'#e8c21c', finlets:'#f0cc1f', pattern:'yellowband', dorsal:'tuna' },
+    fact:'Yellowfin tuna can swim faster than 40 mph (about 65 km/h).' },
+  { id:'cod', name:'Atlantic Cod', min:750, max:1000, value:210, hp:8, size:26, speed:50, tier:2, weight:6, cut:550,
+    look:{ h:.28, tail:'square', back:'#7b6c42', side:'#b6a877', belly:'#ece6cf', fin:'#8a7b52', pattern:'mottled', dorsal:'triple', barbel:true, latline:'#f2eedc' },
+    fact:'Cod use the whisker on their chin, called a barbel, to feel for food on the sea floor.' },
+  { id:'swordfish', name:'Swordfish', min:880, max:1150, value:320, hp:11, size:30, speed:95, tier:2, weight:5, cut:900,
+    look:{ h:.22, tail:'lunate', back:'#3b3c5c', side:'#7e8197', belly:'#d3d4de', fin:'#3b3c5c', bill:'sword', dorsal:'shark' },
+    fact:'Swordfish warm their eyes and brain with a special organ so they can see in cold, deep water.' },
+  { id:'amberjack', name:'Greater Amberjack', min:1050, max:1350, value:480, hp:12, size:30, speed:85, tier:3, weight:6, cut:750, school:[3,4],
+    look:{ h:.3, tail:'fork', back:'#56677a', side:'#c7ccc6', belly:'#eeeee6', fin:'#c9a84a', pattern:'amberline' },
+    fact:'Greater amberjacks love to gather around shipwrecks, reefs and oil rigs.' },
+  { id:'hammer', name:'Hammerhead Shark', min:1200, max:1510, value:700, hp:16, size:38, speed:70, tier:3, weight:5, cut:650,
+    look:{ h:.2, tail:'shark', back:'#7a8791', side:'#99a5ad', belly:'#edf0f2', fin:'#6e7b85', dorsal:'sharktall', shark:true, hammer:true },
+    fact:'A hammerhead’s wide head spreads out its eyes and electric sensors, helping it find prey hidden in the sand.' },
+  { id:'marlin', name:'Blue Marlin', min:1450, max:1700, value:1000, hp:20, size:34, speed:115, tier:4, weight:5, cut:950,
+    look:{ h:.24, tail:'lunate', back:'#173a8c', side:'#6f8fc8', belly:'#dfe6f2', fin:'#1d3f86', bill:'spear', dorsal:'sail', pattern:'bars' },
+    fact:'Female blue marlin can weigh more than 1,000 pounds, much bigger than the males.' },
+  { id:'oarfish', name:'Giant Oarfish', min:1600, max:1870, value:1350, hp:24, size:62, speed:30, tier:4, weight:3, cut:400,
+    look:{ eel:true, h:.09, back:'#c9d2da', side:'#e9eef2', belly:'#f7f9fa', fin:'#d8323a' },
+    fact:'The giant oarfish is the longest bony fish in the world and can grow over 25 feet (8 m) long.' },
+  { id:'angler', name:'Anglerfish', min:1850, max:2100, value:1800, hp:27, size:24, speed:28, tier:5, weight:5, cut:350,
+    look:{ h:.62, tail:'round', back:'#3a2c30', side:'#4d3c40', belly:'#5d4a4e', fin:'#2e2326', angler:true },
+    fact:'Deep-sea anglerfish wave a glowing lure, lit by bacteria, to attract prey in the dark.' },
+  { id:'greenland', name:'Greenland Shark', min:1980, max:2230, value:2400, hp:33, size:42, speed:22, tier:5, weight:4, cut:500,
+    look:{ h:.22, tail:'shark', back:'#4b4943', side:'#5c5a53', belly:'#7a776e', fin:'#45433d', dorsal:'sharksmall', shark:true, blunt:.6 },
+    fact:'Greenland sharks may live 250 years or more, the longest of any animal with a backbone.' },
+  { id:'coelacanth', name:'Coelacanth', min:2200, max:2440, value:3200, hp:38, size:30, speed:25, tier:6, weight:5, cut:600,
+    look:{ h:.3, tail:'coel', back:'#2f4a6a', side:'#46658a', belly:'#5f7ea0', fin:'#2f4a6a', pattern:'blotches', lobed:true },
+    fact:'Coelacanths were thought to be extinct for 65 million years until one was caught in 1938.' },
+  { id:'goliath', name:'Goliath Grouper', min:2380, max:2470, value:4500, hp:45, size:40, speed:30, tier:6, weight:0, cut:450, wreck:true,
+    look:{ h:.42, tail:'round', back:'#6f5f3a', side:'#9c8a5a', belly:'#cdbf92', fin:'#6a5a36', pattern:'grouperbars', bigmouth:true },
+    fact:'Goliath groupers can weigh up to 800 pounds and love to live around shipwrecks.' },
 ];
+const speciesById = id => SPECIES.find(s => s.id === id);
 
+// ======================================================================
+//  BOATS & GEAR
+//  Each boat comes with a stronger set of gear. You must max out every
+//  gear upgrade (Lv 4) before buying the next boat, and the new boat
+//  resets your gear to Lv 1 of its stronger set.
+// ======================================================================
 const BOATS = [
-  { name:'Tiny Raft',    cost:50,   w:130, note:'Floats… mostly.' },
-  { name:'Rowboat',      cost:700,  w:180, note:'Unlocks Tuna & Swordfish' },
-  { name:'Fishing Boat', cost:2200, w:240, note:'Unlocks Hammerheads & Anglerfish' },
-  { name:'Trawler',      cost:6000, w:300, note:'Unlocks the Golden Marlin!' },
+  { name:'Tiny Raft',         cost:50,     w:130 },
+  { name:'Rowboat',           cost:400,    w:170 },
+  { name:'Skiff',             cost:2500,   w:200 },
+  { name:'Fishing Boat',      cost:9000,   w:240 },
+  { name:'Trawler',           cost:25000,  w:280 },
+  { name:'Research Vessel',   cost:70000,  w:320 },
+  { name:'Deep-Sea Explorer', cost:180000, w:360 },
 ];
-const RODS = [
-  { name:'Rusty Rod',      cost:30,   speed:170 },
-  { name:'Bamboo Rod',     cost:150,  speed:240 },
-  { name:'Fiberglass Rod', cost:420,  speed:330 },
-  { name:'Carbon Rod',     cost:1000, speed:440 },
-  { name:'Legend Rod',     cost:2500, speed:580 },
-];
-const LURES = [
-  { name:'Bent Hook',    cost:0,    power:1, color:'#9aa4ad' },
-  { name:'Spinner',      cost:100,  power:2, color:'#e9a91c' },
-  { name:'Silver Spoon', cost:320,  power:3, color:'#e6eef5' },
-  { name:'Glow Jig',     cost:850,  power:5, color:'#7dff9a' },
-  { name:'Golden Lure',  cost:2000, power:8, color:'#ffd34d' },
-];
-const LINES = [   // "slack" — how far the lure can go from the rod tip
-  { name:'Short Slack',     cost:0,    len:150 },
-  { name:'Longer Line',     cost:60,   len:240 },
-  { name:'Deep Line',       cost:240,  len:380 },
-  { name:'Deeper Line',     cost:650,  len:560 },
-  { name:'Abyss Line',      cost:1400, len:800 },
-  { name:'Trench Line',     cost:2600, len:1100 },
-  { name:'Bottomless Line', cost:4500, len:1500 },
-  { name:'Wreck Diver Line',cost:7000, len:2000 },
-];
-// zone = how much wider (px/sec) the "good cut" speed window gets
-const KNIVES = [
-  { name:'Old Knife',     cost:0,    chops:4, mult:1.0, zone:0 },
-  { name:'Steel Knife',   cost:80,   chops:3, mult:1.2, zone:80 },
-  { name:"Chef's Knife",  cost:280,  chops:3, mult:1.4, zone:160 },
-  { name:'Fillet Master', cost:750,  chops:2, mult:1.7, zone:240 },
-  { name:'Dragon Blade',  cost:2000, chops:1, mult:2.0, zone:320 },
-];
-const BUCKETS = [
-  { name:'Small Bucket', cost:0,    cap:4 },
-  { name:'Big Bucket',   cost:100,  cap:6 },
-  { name:'Cooler',       cost:350,  cap:8 },
-  { name:'Big Cooler',   cost:900,  cap:10 },
-  { name:'Fish Hold',    cost:2000, cap:12 },
-];
+const GEAR = {
+  rod:    { kind:'Rod',    icon:'🎣', costMult:1.0, names:['Rusty Rod','Bamboo Rod','Fiberglass Rod','Graphite Rod','Carbon Rod','Titanium Rod','Legend Rod'] },
+  lure:   { kind:'Lure',   icon:'🪝', costMult:1.1, names:['Bent Hook','Spinner','Silver Spoon','Bucktail Jig','Glow Jig','Golden Lure','Diamond Lure'] },
+  line:   { kind:'Slack',  icon:'🧵', costMult:0.9, names:['Short Slack','Long Line','Deep Line','Deeper Line','Abyss Line','Trench Line','Bottomless Line'] },
+  knife:  { kind:'Knife',  icon:'🔪', costMult:0.8, names:['Old Knife','Steel Knife',"Chef's Knife",'Fillet Knife','Damascus Knife','Obsidian Blade','Dragon Blade'] },
+  bucket: { kind:'Bucket', icon:'🪣', costMult:1.2, names:['Small Bucket','Big Bucket','Cooler','Big Cooler','Fish Hold','Ice Hold','Mega Hold'] },
+};
+const GEAR_KEYS = Object.keys(GEAR);
+const LURE_COLORS = ['#9aa4ad', '#e9a91c', '#e6eef5', '#f4f4f4', '#7dff9a', '#ffd34d', '#bff4ff'];
+const ROD_COLORS  = ['#8b5a2b', '#c9a65b', '#4aa3df', '#555', '#222', '#9fa8b0', '#d4a017'];
 
-const SHOP = [
-  { key:'boat',   kind:'Boat',   icon:'⛵', list:BOATS,   stat:b => b.note },
-  { key:'rod',    kind:'Rod',    icon:'🎣', list:RODS,    stat:r => `Lure moves ${r.speed} speed` },
-  { key:'lure',   kind:'Lure',   icon:'🪝', list:LURES,   stat:l => `Hits fish for ${l.power} damage` },
-  { key:'line',   kind:'Slack',  icon:'🧵', list:LINES,   stat:l => `Reaches about ${Math.min(SEA_DEPTH, Math.round(l.len - 60)) / PX_PER_M | 0} m deep${l.len - 60 >= SEA_DEPTH - 120 ? ' (the sea floor!)' : ''}` },
-  { key:'knife',  kind:'Knife',  icon:'🔪', list:KNIVES,  stat:k => `${k.chops} cut${k.chops > 1 ? 's' : ''} per fish · ${k.zone ? `+${k.zone} wider speed zone · ` : ''}fillets ×${k.mult}` },
-  { key:'bucket', kind:'Bucket', icon:'🪣', list:BUCKETS, stat:b => `Holds ${b.cap} fish` },
-];
+// g = overall gear power index (0..27): boat tier * 4 + level
+const STAT = {
+  rod:    g => 180 + g * 18,                       // lure speed
+  lure:   g => 1 + Math.floor(g / 2),              // damage per hit
+  line:   g => 220 + g * 90,                       // slack length
+  knife:  g => ({ chops: Math.max(1, 4 - Math.floor(g / 7)), zone: g * 25, mult: Math.round((1 + g * 0.05) * 100) / 100 }),
+  bucket: g => 4 + Math.floor(g / 2),
+};
+const gearCost = (key, g) => Math.round(20 * Math.pow(1.33, g) * GEAR[key].costMult / 5) * 5;
+const statText = {
+  rod:    g => `Lure speed ${STAT.rod(g)}`,
+  lure:   g => `Hits fish for ${STAT.lure(g)} damage`,
+  line:   g => `Reaches ${Math.round(Math.min(SEA_DEPTH, STAT.line(g) - 60) / PX_PER_M)} m deep`,
+  knife:  g => { const k = STAT.knife(g); return `${k.chops} cut${k.chops > 1 ? 's' : ''} per fish · ${k.zone ? `+${k.zone} speed zone · ` : ''}fillets ×${k.mult}`; },
+  bucket: g => `Holds ${STAT.bucket(g)} fish`,
+};
 
 // ======================================================================
 //  SAVE STATE
 // ======================================================================
-const SAVE_KEY = 'hook-line-sinker-v1';
+const SAVE_KEY = 'hook-line-sinker-v2';
 function freshState() {
-  return { coins:100, lv:{ boat:-1, rod:-1, lure:0, line:0, knife:0, bucket:0 }, bucket:[], seen:{}, earned:0 };
+  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, bucket:[], seen:{}, earned:0 };
 }
 function load() {
   try {
@@ -99,15 +127,18 @@ function load() {
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
 let S = load();
 
+const tier = () => Math.max(0, S.tier);
+const gIdx = key => tier() * LV_PER_TIER + S.lv[key];
+const gearName = key => `${GEAR[key].names[tier()]} Lv ${S.lv[key] + 1}`;
 const G = () => ({
-  boat:   BOATS[Math.max(0, S.lv.boat)],
-  rod:    RODS[Math.max(0, S.lv.rod)],
-  lure:   LURES[S.lv.lure],
-  line:   LINES[S.lv.line],
-  knife:  KNIVES[S.lv.knife],
-  bucket: BUCKETS[S.lv.bucket],
+  boat: BOATS[tier()],
+  speed: STAT.rod(gIdx('rod')),
+  power: STAT.lure(gIdx('lure')),
+  len: STAT.line(gIdx('line')),
+  knife: STAT.knife(gIdx('knife')),
+  cap: STAT.bucket(gIdx('bucket')),
 });
-const speciesById = id => SPECIES.find(s => s.id === id);
+const allGearMaxed = () => GEAR_KEYS.every(k => S.lv[k] >= LV_PER_TIER - 1);
 
 // ======================================================================
 //  HELPERS
@@ -115,146 +146,325 @@ const speciesById = id => SPECIES.find(s => s.id === id);
 const $ = id => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = n => n.toLocaleString('en-US');
 let toastTimer = null;
-function toast(msg, ms = 2200) {
+function toast(msg, ms = 2400) {
   const t = $('toast');
   t.textContent = msg; t.classList.remove('hidden');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.add('hidden'), ms);
 }
 
-// Shared fish painter. dir = 1 faces right, -1 faces left.
-function drawFish(ctx, x, y, sp, dir, t, opts = {}) {
-  const s = opts.size || sp.size;
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(dir, 1);
-  if (opts.angle) ctx.rotate(opts.angle);
-  const wig = Math.sin(t * 10) * 0.18;
+// ======================================================================
+//  FISH PAINTER — draws real species from their "look"
+//  L = half body length. Faces right when dir = 1.
+// ======================================================================
+function bodyPath(c, L, H, blunt) {
+  const b = blunt || 0;
+  c.beginPath();
+  c.moveTo(L, H * 0.05);
+  c.bezierCurveTo(L * (0.98 - b * 0.05), -H * (0.45 + b * 0.55), L * 0.6, -H, L * 0.15, -H);
+  c.bezierCurveTo(-L * 0.35, -H, -L * 0.65, -H * 0.4, -L * 0.85, -H * 0.17);
+  c.lineTo(-L * 0.85, H * 0.17);
+  c.bezierCurveTo(-L * 0.65, H * 0.4, -L * 0.35, H * 0.95, L * 0.15, H * 0.95);
+  c.bezierCurveTo(L * 0.6, H * 0.95, L * 0.97, H * 0.5, L, H * 0.05);
+  c.closePath();
+}
+function tri(c, pts) { c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); c.fill(); }
 
-  // tail
-  ctx.fillStyle = sp.color;
-  ctx.beginPath();
-  ctx.moveTo(-s * 0.75, 0);
-  ctx.lineTo(-s * 1.45, -s * (0.5 + wig));
-  ctx.lineTo(-s * 1.3, 0);
-  ctx.lineTo(-s * 1.45, s * (0.5 - wig));
-  ctx.closePath(); ctx.fill();
-
-  // dorsal fin
-  ctx.beginPath();
-  ctx.moveTo(-s * 0.35, -s * 0.38);
-  ctx.lineTo(s * 0.05, -s * (sp.kind === 'hammer' ? 0.95 : 0.78));
-  ctx.lineTo(s * 0.3, -s * 0.38);
-  ctx.closePath(); ctx.fill();
-
-  // body
-  const g = ctx.createLinearGradient(0, -s * 0.5, 0, s * 0.5);
-  g.addColorStop(0, sp.color); g.addColorStop(0.55, sp.color); g.addColorStop(1, sp.belly);
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, s, s * (sp.kind === 'sword' ? 0.38 : 0.5), 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  if (sp.stripes) {
-    ctx.strokeStyle = 'rgba(10,40,30,.55)'; ctx.lineWidth = 2;
-    for (let i = -2; i <= 2; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * s * 0.28, -s * 0.45);
-      ctx.quadraticCurveTo(i * s * 0.28 + 4, -s * 0.25, i * s * 0.28, -s * 0.08);
-      ctx.stroke();
-    }
+function drawTail(c, type, L, H, sw) {
+  const x0 = -L * 0.83, s = sw * H;
+  c.beginPath();
+  if (type === 'fork') {
+    c.moveTo(x0, -H * 0.16);
+    c.quadraticCurveTo(-L * 1.05, -H * 0.5 + s, -L * 1.28, -H * 0.95 + s);
+    c.quadraticCurveTo(-L * 1.12, -H * 0.2 + s, -L * 1.05, s * 0.5);
+    c.quadraticCurveTo(-L * 1.12, H * 0.2 + s, -L * 1.28, H * 0.95 + s);
+    c.quadraticCurveTo(-L * 1.05, H * 0.5 + s, x0, H * 0.16);
+  } else if (type === 'lunate') {
+    c.moveTo(x0, -H * 0.12);
+    c.quadraticCurveTo(-L * 1.0, -H * 0.6 + s, -L * 1.25, -H * 1.35 + s);
+    c.quadraticCurveTo(-L * 1.05, -H * 0.3 + s, -L * 1.0, s * 0.5);
+    c.quadraticCurveTo(-L * 1.05, H * 0.3 + s, -L * 1.25, H * 1.35 + s);
+    c.quadraticCurveTo(-L * 1.0, H * 0.6 + s, x0, H * 0.12);
+  } else if (type === 'square') {
+    c.moveTo(x0, -H * 0.16);
+    c.lineTo(-L * 1.18, -H * 0.62 + s); c.lineTo(-L * 1.2, H * 0.62 + s);
+    c.lineTo(x0, H * 0.16);
+  } else if (type === 'round') {
+    c.moveTo(x0, -H * 0.18);
+    c.quadraticCurveTo(-L * 1.3, -H * 0.9 + s, -L * 1.3, s);
+    c.quadraticCurveTo(-L * 1.3, H * 0.9 + s, x0, H * 0.18);
+  } else if (type === 'shark') {
+    c.moveTo(x0, -H * 0.15);
+    c.quadraticCurveTo(-L * 1.05, -H * 0.8 + s, -L * 1.32, -H * 1.5 + s);
+    c.quadraticCurveTo(-L * 1.2, -H * 0.3 + s, -L * 1.12, H * 0.1 + s);
+    c.quadraticCurveTo(-L * 1.1, H * 0.5 + s, -L * 1.16, H * 0.75 + s);
+    c.quadraticCurveTo(-L * 0.98, H * 0.4, x0, H * 0.15);
+  } else if (type === 'coel') {   // three-lobed tail
+    c.moveTo(x0, -H * 0.2);
+    c.quadraticCurveTo(-L * 1.05, -H * 0.9 + s, -L * 1.15, -H * 0.85 + s);
+    c.lineTo(-L * 1.1, -H * 0.15 + s);
+    c.lineTo(-L * 1.35, s); c.lineTo(-L * 1.1, H * 0.15 + s);
+    c.lineTo(-L * 1.15, H * 0.85 + s);
+    c.quadraticCurveTo(-L * 1.05, H * 0.9 + s, x0, H * 0.2);
   }
-  if (sp.spots) {
-    ctx.fillStyle = 'rgba(40,30,15,.45)';
-    [[-.4,-.15],[-.1,.1],[.2,-.2],[.35,.12],[-.55,.12]].forEach(([a,b]) => {
-      ctx.beginPath(); ctx.arc(a * s, b * s, s * 0.08, 0, 7); ctx.fill();
+  c.closePath(); c.fill();
+}
+
+function drawPattern(c, v, L, H, t) {
+  c.save();
+  c.lineCap = 'round';
+  switch (v.pattern) {
+    case 'wavy':      // mackerel tiger stripes on the back
+      c.strokeStyle = 'rgba(10,30,25,.75)'; c.lineWidth = Math.max(1.2, L * 0.07);
+      for (let i = 0; i < 9; i++) {
+        const x = L * 0.45 - i * L * 0.15;
+        c.beginPath(); c.moveTo(x, -H); c.quadraticCurveTo(x + L * 0.08, -H * 0.55, x - L * 0.02, -H * 0.15); c.stroke();
+      }
+      break;
+    case 'stripes':   // striped bass horizontal lines
+      c.strokeStyle = 'rgba(30,35,30,.6)'; c.lineWidth = Math.max(1, H * 0.09);
+      for (let i = 0; i < 6; i++) {
+        const y = -H * 0.75 + i * H * 0.27;
+        c.beginPath(); c.moveTo(L * 0.55, y); c.lineTo(-L * 0.85, y * 0.5); c.stroke();
+      }
+      break;
+    case 'bluespots':
+      c.fillStyle = 'rgba(40,120,200,.7)';
+      for (let i = 0; i < 14; i++) { c.beginPath(); c.arc(L * 0.6 - (i % 7) * L * 0.2, -H * 0.4 + Math.floor(i / 7) * H * 0.5, L * 0.035, 0, 7); c.fill(); }
+      break;
+    case 'yellowband':
+      c.fillStyle = 'rgba(240,200,40,.6)';
+      c.beginPath(); c.ellipse(-L * 0.05, -H * 0.15, L * 0.7, H * 0.09, 0, 0, 7); c.fill();
+      break;
+    case 'mottled':
+      c.fillStyle = 'rgba(60,45,20,.35)';
+      for (let i = 0; i < 22; i++) { c.beginPath(); c.arc(L * (0.7 - ((i * 37) % 150) / 100), -H * (0.9 - ((i * 53) % 120) / 100), L * 0.05, 0, 7); c.fill(); }
+      break;
+    case 'amberline':  // dark band through the eye and a yellow side stripe
+      c.strokeStyle = 'rgba(60,40,20,.65)'; c.lineWidth = L * 0.06;
+      c.beginPath(); c.moveTo(L * 0.85, -H * 0.05); c.lineTo(L * 0.4, -H * 0.9); c.stroke();
+      c.fillStyle = 'rgba(214,170,60,.6)';
+      c.beginPath(); c.ellipse(-L * 0.1, -H * 0.05, L * 0.75, H * 0.1, 0, 0, 7); c.fill();
+      break;
+    case 'bars':      // marlin light-blue vertical bars
+      c.strokeStyle = 'rgba(170,205,255,.6)'; c.lineWidth = L * 0.03;
+      for (let i = 0; i < 12; i++) { const x = L * 0.5 - i * L * 0.11; c.beginPath(); c.moveTo(x, -H * 0.8); c.lineTo(x - L * 0.03, H * 0.4); c.stroke(); }
+      break;
+    case 'blotches':  // coelacanth white flecks
+      c.fillStyle = 'rgba(235,240,245,.75)';
+      for (let i = 0; i < 16; i++) { c.beginPath(); c.ellipse(L * (0.65 - ((i * 29) % 150) / 100), -H * (0.75 - ((i * 47) % 140) / 100), L * 0.06, L * 0.035, 0.4, 0, 7); c.fill(); }
+      break;
+    case 'grouperbars':
+      c.fillStyle = 'rgba(50,38,18,.4)';
+      for (let i = 0; i < 5; i++) { c.beginPath(); c.ellipse(L * 0.45 - i * L * 0.3, -H * 0.2, L * 0.09, H * 0.75, 0.15, 0, 7); c.fill(); }
+      for (let i = 0; i < 18; i++) { c.beginPath(); c.arc(L * (0.75 - ((i * 31) % 160) / 100), -H * (0.8 - ((i * 43) % 150) / 100), L * 0.03, 0, 7); c.fill(); }
+      break;
+  }
+  c.restore();
+}
+
+function drawEel(c, sp, v, L, t, flash) {
+  // giant oarfish: a long silver ribbon with a red crest
+  const N = 26, pts = [];
+  for (let i = 0; i <= N; i++) {
+    const u = i / N, x = L - u * 2 * L;
+    pts.push([x, Math.sin(t * 3 - u * 7) * L * 0.08 * u, L * v.h * (1 - u * 0.75)]);
+  }
+  c.strokeStyle = v.fin; c.lineWidth = Math.max(1.5, L * 0.025);
+  for (let i = 1; i < N; i += 1) {   // dorsal crest
+    const [x, y, h] = pts[i];
+    c.beginPath(); c.moveTo(x, y - h); c.lineTo(x - L * 0.03, y - h - L * 0.07); c.stroke();
+  }
+  // crest plume on the head
+  c.beginPath(); c.moveTo(L * 0.85, -L * 0.08); c.quadraticCurveTo(L * 0.8, -L * 0.35, L * 0.55, -L * 0.42 + Math.sin(t * 4) * 3); c.stroke();
+  c.beginPath(); c.moveTo(L * 0.8, -L * 0.08); c.quadraticCurveTo(L * 0.7, -L * 0.28, L * 0.5, -L * 0.3); c.stroke();
+  const g = c.createLinearGradient(0, -L * v.h, 0, L * v.h);
+  g.addColorStop(0, v.back); g.addColorStop(0.5, v.side); g.addColorStop(1, v.belly);
+  c.fillStyle = flash ? '#fff' : g;
+  c.beginPath();
+  pts.forEach(([x, y, h], i) => i ? c.lineTo(x, y - h) : c.moveTo(x, y - h));
+  for (let i = N; i >= 0; i--) { const [x, y, h] = pts[i]; c.lineTo(x, y + h); }
+  c.closePath(); c.fill();
+  c.fillStyle = 'rgba(80,90,110,.35)';
+  for (let i = 3; i < N; i += 2) { const [x, y] = pts[i]; c.beginPath(); c.arc(x, y, L * 0.012, 0, 7); c.fill(); }
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(L * 0.9, -L * 0.015, L * 0.03, 0, 7); c.fill();
+  c.fillStyle = '#111'; c.beginPath(); c.arc(L * 0.91, -L * 0.015, L * 0.016, 0, 7); c.fill();
+}
+
+function drawFish(c, x, y, sp, dir, t, opts = {}) {
+  const v = sp.look, L = opts.size || sp.size, H = L * v.h;
+  c.save();
+  c.translate(x, y);
+  c.scale(dir, 1);
+  if (opts.angle) c.rotate(opts.angle);
+  if (v.eel) { drawEel(c, sp, v, L, t, opts.flash); c.restore(); return; }
+  const sw = Math.sin(t * (v.shark ? 5 : 9)) * 0.14;
+  const fin = v.fin;
+
+  // ---- tail & fins behind the body ----
+  c.fillStyle = fin;
+  drawTail(c, v.tail, L, H, sw);
+  switch (v.dorsal) {
+    case 'spiny':
+      for (let i = 0; i < 9; i++) { const x0 = L * 0.35 - i * L * 0.1; tri(c, [[x0, -H * 0.8], [x0 - L * 0.04, -H * 1.35], [x0 - L * 0.1, -H * 0.8]]); }
+      tri(c, [[-L * 0.4, -H * 0.7], [-L * 0.55, -H * 1.15], [-L * 0.75, -H * 0.3]]);
+      break;
+    case 'long':
+      c.beginPath(); c.moveTo(L * 0.7, -H * 0.85); c.quadraticCurveTo(L * 0.2, -H * 1.55, -L * 0.8, -H * 0.4); c.lineTo(-L * 0.6, -H * 0.5); c.closePath(); c.fill();
+      break;
+    case 'sail':
+      c.beginPath(); c.moveTo(L * 0.55, -H * 0.8); c.quadraticCurveTo(L * 0.4, -H * 2.6, L * 0.05, -H * 2.0); c.quadraticCurveTo(-L * 0.4, -H * 1.1, -L * 0.6, -H * 0.55); c.lineTo(-L * 0.2, -H * 0.8); c.closePath(); c.fill();
+      break;
+    case 'tuna':
+      tri(c, [[L * 0.35, -H * 0.85], [L * 0.15, -H * 1.5], [L * 0.0, -H * 0.9]]);
+      tri(c, [[-L * 0.1, -H * 0.85], [-L * 0.35, -H * 1.9], [-L * 0.32, -H * 0.7]]);
+      tri(c, [[-L * 0.1, H * 0.85], [-L * 0.35, H * 1.9], [-L * 0.32, H * 0.7]]);
+      break;
+    case 'triple':
+      [[0.4, 0.15], [0.05, -0.2], [-0.3, -0.55]].forEach(([a, b]) => {
+        c.beginPath(); c.moveTo(L * a, -H * 0.85); c.quadraticCurveTo(L * (a + b) / 2, -H * 1.45, L * b, -H * 0.8); c.closePath(); c.fill();
+      });
+      break;
+    case 'two':
+      tri(c, [[L * 0.4, -H * 0.85], [L * 0.2, -H * 1.5], [L * 0.0, -H * 0.9]]);
+      tri(c, [[-L * 0.05, -H * 0.9], [-L * 0.2, -H * 1.4], [-L * 0.45, -H * 0.7]]);
+      break;
+    case 'shark':
+      tri(c, [[L * 0.3, -H * 0.9], [L * 0.12, -H * 1.9], [L * 0.0, -H * 0.9]]);
+      break;
+    case 'sharktall':
+      c.beginPath(); c.moveTo(L * 0.25, -H * 0.9); c.quadraticCurveTo(L * 0.05, -H * 2.3, -L * 0.05, -H * 2.6); c.quadraticCurveTo(-L * 0.05, -H * 1.6, -L * 0.15, -H * 0.9); c.closePath(); c.fill();
+      tri(c, [[-L * 0.5, -H * 0.6], [-L * 0.58, -H * 1.1], [-L * 0.66, -H * 0.5]]);
+      break;
+    case 'sharksmall':
+      tri(c, [[L * 0.1, -H * 0.9], [-L * 0.02, -H * 1.35], [-L * 0.15, -H * 0.9]]);
+      tri(c, [[-L * 0.35, -H * 0.75], [-L * 0.45, -H * 1.2], [-L * 0.55, -H * 0.65]]);
+      break;
+    default:
+      if (!v.angler) tri(c, [[L * 0.3, -H * 0.85], [L * 0.05, -H * 1.55], [-L * 0.3, -H * 0.8]]);
+  }
+  if (!v.dorsal || v.dorsal === 'two' || v.dorsal === 'spiny' || v.dorsal === 'triple') tri(c, [[-L * 0.15, H * 0.85], [-L * 0.35, H * 1.35], [-L * 0.55, H * 0.6]]);
+  if (v.lobed) {   // coelacanth's fleshy lobed fins
+    [[L * 0.05, -H * 0.9, -1], [-L * 0.45, -H * 0.7, -1], [-L * 0.1, H * 0.9, 1], [-L * 0.45, H * 0.7, 1]].forEach(([fx, fy, s]) => {
+      c.beginPath(); c.ellipse(fx, fy + s * H * 0.35, L * 0.08, H * 0.4, s * 0.5, 0, 7); c.fill();
     });
   }
-  if (sp.kind === 'sword') {
-    ctx.fillStyle = sp.color;
-    ctx.beginPath();
-    ctx.moveTo(s * 0.85, -s * 0.12); ctx.lineTo(s * 2.0, 0); ctx.lineTo(s * 0.85, s * 0.08);
-    ctx.closePath(); ctx.fill();
+
+  // ---- body ----
+  bodyPath(c, L, H, v.blunt);
+  const g = c.createLinearGradient(0, -H, 0, H);
+  g.addColorStop(0, v.back); g.addColorStop(0.45, v.side); g.addColorStop(1, v.belly);
+  c.fillStyle = g; c.fill();
+  c.save(); bodyPath(c, L, H, v.blunt); c.clip();
+  drawPattern(c, v, L, H, t);
+  // lateral line
+  c.strokeStyle = v.latline || 'rgba(255,255,255,.25)'; c.lineWidth = Math.max(0.8, L * 0.02);
+  c.beginPath(); c.moveTo(L * 0.55, -H * 0.4); c.quadraticCurveTo(0, -H * 0.55, -L * 0.85, -H * 0.02); c.stroke();
+  // gills
+  if (v.shark) {
+    c.strokeStyle = 'rgba(40,45,50,.45)'; c.lineWidth = Math.max(1, L * 0.02);
+    for (let i = 0; i < 5; i++) { const gx = L * 0.55 - i * L * 0.05; c.beginPath(); c.moveTo(gx, -H * 0.35); c.lineTo(gx - L * 0.02, H * 0.25); c.stroke(); }
+  } else {
+    c.strokeStyle = 'rgba(0,0,0,.25)'; c.lineWidth = Math.max(1, L * 0.03);
+    c.beginPath(); c.arc(L * 0.9, 0, L * 0.38, Math.PI * 0.75, Math.PI * 1.22); c.stroke();
   }
-  if (sp.kind === 'hammer') {
-    ctx.fillStyle = sp.color;
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(s * 0.75, -s * 0.5, s * 0.28, s, 6) : ctx.rect(s * 0.75, -s * 0.5, s * 0.28, s);
-    ctx.fill();
-  }
-  if (sp.kind === 'angler') {
-    ctx.strokeStyle = sp.color; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(s * 0.3, -s * 0.45);
-    ctx.quadraticCurveTo(s * 0.9, -s * 1.3, s * 1.2, -s * 0.8); ctx.stroke();
-    const glow = 0.6 + Math.sin(t * 4) * 0.3;
-    ctx.fillStyle = `rgba(255,250,150,${glow})`;
-    ctx.beginPath(); ctx.arc(s * 1.2, -s * 0.8, s * 0.18, 0, 7); ctx.fill();
-    ctx.fillStyle = '#fff';
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.moveTo(s * (0.55 + i * 0.1), s * 0.1); ctx.lineTo(s * (0.6 + i * 0.1), s * 0.25); ctx.lineTo(s * (0.65 + i * 0.1), s * 0.1);
-      ctx.fill();
+  c.restore();
+
+  // finlets (tuna, mackerel)
+  if (v.finlets) {
+    c.fillStyle = v.finlets;
+    for (let i = 0; i < 5; i++) {
+      const fx = -L * 0.4 - i * L * 0.08, fh = H * (0.55 - i * 0.07);
+      tri(c, [[fx, -fh], [fx - L * 0.05, -fh - L * 0.06], [fx - L * 0.06, -fh + L * 0.01]]);
+      tri(c, [[fx, fh], [fx - L * 0.05, fh + L * 0.06], [fx - L * 0.06, fh - L * 0.01]]);
     }
   }
-  if (sp.gold) {
-    ctx.strokeStyle = `rgba(255,255,255,${0.4 + Math.sin(t * 6) * 0.3})`; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.8, s * 0.25, 0, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
-  }
 
-  // eye
-  const ex = sp.kind === 'hammer' ? s * 0.92 : s * 0.55;
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(ex, -s * 0.12, Math.max(2.5, s * 0.13), 0, 7); ctx.fill();
-  ctx.fillStyle = '#111';
-  ctx.beginPath(); ctx.arc(ex + 1, -s * 0.12, Math.max(1.4, s * 0.07), 0, 7); ctx.fill();
+  // ---- head features ----
+  const eyeX = v.angler ? L * 0.55 : v.shark ? L * 0.78 : L * 0.72, eyeY = v.angler ? -H * 0.35 : -H * 0.18;
+  const eyeR = Math.max(2, L * (v.angler ? 0.06 : v.shark ? 0.035 : 0.075));
+  if (v.bill === 'sword') {
+    c.fillStyle = v.back;
+    tri(c, [[L * 0.95, -H * 0.22], [L * 2.0, -H * 0.02], [L * 0.95, H * 0.12]]);
+  } else if (v.bill === 'spear') {
+    c.fillStyle = v.back;
+    tri(c, [[L * 0.95, -H * 0.15], [L * 1.7, H * 0.02], [L * 0.95, H * 0.1]]);
+  }
+  if (v.hammer) {
+    c.fillStyle = v.back;
+    c.beginPath(); c.ellipse(L * 0.98, -H * 0.05, L * 0.1, H * 1.6, 0, 0, 7); c.fill();
+  }
+  if (v.angler) {
+    // huge toothy mouth
+    c.fillStyle = '#1a1214';
+    c.beginPath(); c.moveTo(L * 0.98, -H * 0.05); c.quadraticCurveTo(L * 0.7, H * 0.55, L * 0.25, H * 0.25); c.quadraticCurveTo(L * 0.6, H * 0.25, L * 0.98, -H * 0.05); c.fill();
+    c.fillStyle = '#f2efe6';
+    for (let i = 0; i < 6; i++) { const tx = L * (0.4 + i * 0.1); tri(c, [[tx, H * 0.18], [tx + L * 0.03, H * 0.42], [tx + L * 0.06, H * 0.2]]); }
+    c.strokeStyle = v.fin; c.lineWidth = Math.max(1.5, L * 0.05);
+    c.beginPath(); c.moveTo(L * 0.5, -H * 0.9); c.quadraticCurveTo(L * 1.0, -H * 2.0, L * 1.35, -H * 1.3); c.stroke();
+    const glow = 0.6 + Math.sin(t * 4) * 0.3;
+    c.fillStyle = `rgba(190,255,230,${glow * 0.35})`; c.beginPath(); c.arc(L * 1.35, -H * 1.3, L * 0.28, 0, 7); c.fill();
+    c.fillStyle = `rgba(210,255,240,${glow})`; c.beginPath(); c.arc(L * 1.35, -H * 1.3, L * 0.11, 0, 7); c.fill();
+  } else if (v.bigmouth) {
+    c.strokeStyle = 'rgba(40,30,10,.7)'; c.lineWidth = Math.max(1.5, L * 0.04);
+    c.beginPath(); c.moveTo(L * 0.99, H * 0.05); c.quadraticCurveTo(L * 0.8, H * 0.35, L * 0.62, H * 0.22); c.stroke();
+  } else if (!v.shark) {
+    c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = Math.max(1, L * 0.025);
+    c.beginPath(); c.moveTo(L * 0.99, H * 0.08); c.lineTo(L * 0.85, H * 0.15); c.stroke();
+  } else {
+    c.strokeStyle = 'rgba(0,0,0,.3)'; c.lineWidth = Math.max(1, L * 0.02);
+    c.beginPath(); c.moveTo(L * 0.92, H * 0.35); c.quadraticCurveTo(L * 0.82, H * 0.5, L * 0.72, H * 0.38); c.stroke();
+  }
+  if (v.barbel) {
+    c.strokeStyle = v.side; c.lineWidth = Math.max(1, L * 0.025);
+    c.beginPath(); c.moveTo(L * 0.82, H * 0.4); c.lineTo(L * 0.8, H * 0.8); c.stroke();
+  }
+  c.fillStyle = v.eye || '#f4f1e6';
+  c.beginPath(); c.arc(eyeX, eyeY, eyeR, 0, 7); c.fill();
+  c.fillStyle = '#0d0d0d';
+  c.beginPath(); c.arc(eyeX + eyeR * 0.15, eyeY, eyeR * 0.6, 0, 7); c.fill();
+  c.fillStyle = 'rgba(255,255,255,.8)';
+  c.beginPath(); c.arc(eyeX + eyeR * 0.35, eyeY - eyeR * 0.3, eyeR * 0.2, 0, 7); c.fill();
+
+  // pectoral fin on top of the body
+  c.fillStyle = v.fin; c.globalAlpha = 0.85;
+  if (v.shark) tri(c, [[L * 0.45, H * 0.6], [L * 0.15, H * 1.5], [L * 0.2, H * 0.6]]);
+  else if (v.lobed) { c.beginPath(); c.ellipse(L * 0.35, H * 0.45, L * 0.1, H * 0.35, 0.6, 0, 7); c.fill(); }
+  else tri(c, [[L * 0.55, H * 0.15], [L * 0.25, H * (0.45 + Math.sin(t * 6) * 0.1)], [L * 0.32, H * 0.05]]);
+  c.globalAlpha = 1;
 
   if (opts.flash) {
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = 'rgba(255,255,255,.7)';
-    ctx.fillRect(-s * 2, -s, s * 4.2, s * 2);
+    c.globalCompositeOperation = 'source-atop';
+    c.fillStyle = 'rgba(255,255,255,.7)';
+    c.fillRect(-L * 2, -H * 3, L * 4.5, H * 6);
   }
-  ctx.restore();
+  c.restore();
 }
 
 // ======================================================================
 //  DOCK SCREEN
 // ======================================================================
 function renderDock() {
-  $('dockCoins').textContent = `🪙 ${S.coins}`;
-  const starterDone = S.lv.boat >= 0 && S.lv.rod >= 0;
+  $('dockCoins').textContent = `🪙 ${fmt(S.coins)}`;
+  const starterDone = S.tier >= 0 && S.hasRod;
 
   $('dockGreeting').textContent = starterDone
     ? `You're back at Saltwater Dock. Sell your fillets and upgrade your gear!`
-    : `Welcome to Saltwater Dock! You have 100 coins — buy a Tiny Raft and the Rusty Rod to head out.`;
+    : `Welcome to Saltwater Dock! You have 100 coins. Buy a Tiny Raft and a Rusty Rod to head out.`;
 
-  // ---- shop ----
   const shop = $('shop');
   shop.innerHTML = '';
-  SHOP.forEach(cat => {
-    if (!starterDone && cat.key !== 'boat' && cat.key !== 'rod') return;
-    const lv = S.lv[cat.key];
-    const cur = lv >= 0 ? cat.list[lv] : null;
-    const next = cat.list[lv + 1];
-    const el = document.createElement('div');
-    el.className = 'item' + (!starterDone ? ' starter' : '');
-    const bars = cat.list.map((_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('');
-    el.innerHTML = `
-      <div class="top"><span class="icon">${cat.icon}</span>
-        <div><div class="kind">${cat.kind}</div><div class="now">${cur ? cur.name : 'None yet'}</div></div></div>
-      <div class="levels">${bars}</div>
-      ${cur ? `<div class="stat">${cat.stat(cur)}</div>` : ''}
-      ${next
-        ? `<div class="next">${lv < 0 ? 'Buy' : 'Upgrade to'} <b>${next.name}</b><br>${cat.stat(next)}</div>
-           <button class="btn ${S.coins >= next.cost ? 'green' : 'blue'}" ${S.coins >= next.cost ? '' : 'disabled'}>
-             ${lv < 0 ? 'Buy' : 'Upgrade'} · 🪙 ${next.cost}</button>`
-        : `<div class="maxed">★ Fully upgraded!</div>`}
-    `;
-    const btn = el.querySelector('button');
-    if (btn) btn.onclick = () => buy(cat);
-    shop.appendChild(el);
-  });
-  $('shopTitle').textContent = starterDone ? '🛒 Upgrade Shop' : '🛒 Starter Shop — buy these first!';
+
+  if (!starterDone) {
+    shop.appendChild(starterCard('⛵', 'Boat', 'Tiny Raft', BOATS[0].cost, S.tier >= 0, () => { S.tier = 0; }));
+    shop.appendChild(starterCard('🎣', 'Rod', 'Rusty Rod', 30, S.hasRod, () => { S.hasRod = true; }));
+  } else {
+    GEAR_KEYS.forEach(key => shop.appendChild(gearCard(key)));
+    shop.appendChild(boatCard());
+  }
+  $('shopTitle').textContent = starterDone ? `🛒 Upgrade Shop — ${BOATS[tier()].name} gear` : '🛒 Starter Shop: buy these first!';
 
   // ---- market ----
   const fillets = S.bucket.filter(f => f.filleted);
@@ -263,37 +473,91 @@ function renderDock() {
   if (!S.bucket.length) {
     ml.innerHTML = `<p class="muted">Your bucket is empty. Go catch some fish!</p>`;
   } else {
-    const counts = {};
-    fillets.forEach(f => {
-      const c = counts[f.id] || (counts[f.id] = { n:0, v:0 });
-      c.n++; c.v += f.value;
-    });
-    let html = Object.entries(counts).map(([id, c]) =>
-      `<div class="market-row"><span>${speciesById(id).name} fillets × ${c.n}</span><b>🪙 ${c.v}</b></div>`).join('');
+    let html = fillets.map(f =>
+      `<div class="market-row"><span>${speciesById(f.id).name} fillets${f.quality < 1 ? ` <i class="bled">(bled, ${Math.round(f.quality * 100)}%)</i>` : ''}</span><b>🪙 ${fmt(f.value)}</b></div>`).join('');
     const total = fillets.reduce((a, f) => a + f.value, 0);
-    if (fillets.length) html += `<div class="market-total">Total: 🪙 ${total}</div>`;
-    if (raw.length) html += `<p class="muted">🐟 ${raw.length} raw fish still in your bucket — the market only buys fillets. Fillet them with your knife on the boat!</p>`;
+    if (fillets.length) html += `<div class="market-total">Total: 🪙 ${fmt(total)}</div>`;
+    if (raw.length) html += `<p class="muted">🐟 ${raw.length} raw fish still in your bucket. The market only buys fillets, so fillet them with your knife on the boat!</p>`;
     ml.innerHTML = html;
   }
   $('sellBtn').disabled = !fillets.length;
 
-  // ---- sail ----
   $('sailBtn').disabled = !starterDone;
   $('sailNote').textContent = starterDone
-    ? `${G().boat.name} · ${G().rod.name} · ${G().lure.name} · bucket holds ${G().bucket.cap}`
+    ? `${BOATS[tier()].name} · reach ${Math.round(Math.min(SEA_DEPTH, G().len - 60) / PX_PER_M)} m · ${G().power} damage · bucket holds ${G().cap}`
     : 'You need a boat and a rod before you can go fishing.';
 
   renderGuide();
 }
 
-function buy(cat) {
-  const next = cat.list[S.lv[cat.key] + 1];
-  if (!next || S.coins < next.cost) return;
-  S.coins -= next.cost;
-  S.lv[cat.key]++;
-  save();
-  toast(`You got the ${next.name}! ${cat.icon}`);
-  renderDock();
+function starterCard(icon, kind, name, cost, owned, onBuy) {
+  const el = document.createElement('div');
+  el.className = 'item starter';
+  el.innerHTML = `
+    <div class="top"><span class="icon">${icon}</span><div><div class="kind">${kind}</div><div class="now">${owned ? name : 'None yet'}</div></div></div>
+    ${owned ? `<div class="maxed">✔ Bought!</div>` :
+      `<div class="next">Buy <b>${name}</b></div>
+       <button class="btn ${S.coins >= cost ? 'green' : 'blue'}" ${S.coins >= cost ? '' : 'disabled'}>Buy · 🪙 ${cost}</button>`}`;
+  const b = el.querySelector('button');
+  if (b) b.onclick = () => { if (S.coins < cost) return; S.coins -= cost; onBuy(); save(); toast(`You got the ${name}!`); renderDock(); };
+  return el;
+}
+
+function gearCard(key) {
+  const gear = GEAR[key], lv = S.lv[key], g = gIdx(key);
+  const maxed = lv >= LV_PER_TIER - 1;
+  const cost = gearCost(key, g + 1);
+  const el = document.createElement('div');
+  el.className = 'item' + (maxed ? ' done' : '');
+  const bars = Array.from({ length: LV_PER_TIER }, (_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('');
+  el.innerHTML = `
+    <div class="top"><span class="icon">${gear.icon}</span>
+      <div><div class="kind">${gear.kind}</div><div class="now">${gearName(key)}</div></div></div>
+    <div class="levels">${bars}</div>
+    <div class="stat">${statText[key](g)}</div>
+    ${maxed
+      ? `<div class="maxed">★ Maxed for this boat</div>`
+      : `<div class="next">Lv ${lv + 2}: ${statText[key](g + 1)}</div>
+         <button class="btn ${S.coins >= cost ? 'green' : 'blue'}" ${S.coins >= cost ? '' : 'disabled'}>Upgrade · 🪙 ${fmt(cost)}</button>`}`;
+  const b = el.querySelector('button');
+  if (b) b.onclick = () => {
+    if (S.coins < cost) return;
+    S.coins -= cost; S.lv[key]++; save();
+    toast(`${gear.icon} ${gearName(key)}!`);
+    renderDock();
+  };
+  return el;
+}
+
+function boatCard() {
+  const next = BOATS[tier() + 1];
+  const el = document.createElement('div');
+  el.className = 'item boat';
+  const bars = BOATS.map((_, i) => `<i class="${i <= tier() ? 'on' : ''}"></i>`).join('');
+  const done = GEAR_KEYS.filter(k => S.lv[k] >= LV_PER_TIER - 1).length;
+  const unlocks = next ? SPECIES.filter(s => s.tier === tier() + 1 && !s.wreck).map(s => s.name).join(' & ') : '';
+  const ready = allGearMaxed();
+  el.innerHTML = `
+    <div class="top"><span class="icon">⛵</span>
+      <div><div class="kind">Boat</div><div class="now">${BOATS[tier()].name}</div></div></div>
+    <div class="levels">${bars}</div>
+    ${next ? `
+      <div class="next">Next: <b>${next.name}</b><br>Unlocks ${unlocks}.<br>
+        <small>Your gear resets to Lv 1 of a <b>stronger set</b> (${GEAR.rod.names[tier() + 1]}, ${GEAR.lure.names[tier() + 1]}…)</small></div>
+      ${ready ? '' : `<div class="lock">🔒 Max out all your gear first (${done}/5 maxed)</div>`}
+      <button class="btn ${ready && S.coins >= next.cost ? 'green' : 'blue'}" ${ready && S.coins >= next.cost ? '' : 'disabled'}>Buy boat · 🪙 ${fmt(next.cost)}</button>`
+    : `<div class="maxed">★ The best boat on the sea!</div>`}`;
+  const b = el.querySelector('button');
+  if (b) b.onclick = () => {
+    if (!allGearMaxed() || S.coins < next.cost) return;
+    S.coins -= next.cost;
+    S.tier++;
+    GEAR_KEYS.forEach(k => { S.lv[k] = 0; });
+    save();
+    toast(`⛵ Welcome aboard the ${next.name}! Your gear moved up to the ${GEAR.rod.names[tier()]} set.`, 4000);
+    renderDock();
+  };
+  return el;
 }
 
 function sellAll() {
@@ -303,7 +567,7 @@ function sellAll() {
   S.coins += total; S.earned += total;
   S.bucket = S.bucket.filter(f => !f.filleted);
   save();
-  toast(`Sold ${fillets.length} fillet${fillets.length > 1 ? 's' : ''} for 🪙 ${total}!`);
+  toast(`Sold ${fillets.length} fillet${fillets.length > 1 ? 's' : ''} for 🪙 ${fmt(total)}!`);
   renderDock();
 }
 
@@ -315,18 +579,22 @@ function renderGuide() {
     const d = document.createElement('div');
     d.className = 'gfish' + (known ? '' : ' locked');
     const c = document.createElement('canvas');
-    c.width = 160; c.height = 44;
+    c.width = 180; c.height = 84;
     const cx = c.getContext('2d');
-    const scale = Math.min(1, 15 / sp.size);
-    cx.save(); cx.translate(80, 22); cx.scale(scale, scale);
+    const v = sp.look;
+    const wide = v.bill === 'sword' ? 3.3 : v.bill ? 3.0 : v.eel ? 2.15 : 2.65;
+    const tall = v.eel ? 0.5 : v.h * (v.dorsal === 'sail' ? 3.6 : v.dorsal === 'sharktall' ? 3.6 : v.angler ? 3.4 : 2.6);
+    const scale = Math.min(2.4, 160 / (sp.size * wide), 70 / (sp.size * tall));
+    cx.save(); cx.translate(v.bill ? 72 : 96, v.dorsal === 'sail' || v.dorsal === 'sharktall' || v.angler ? 50 : 44); cx.scale(scale, scale);
     if (!known) cx.filter = 'brightness(0)';
     drawFish(cx, 0, 0, sp, 1, 0);
     cx.restore();
     d.appendChild(c);
     d.insertAdjacentHTML('beforeend',
-      `<b>${known ? sp.name : '???'}</b>${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m · ${sp.hp} HP · 🪙${sp.value}` +
+      `<b>${known ? sp.name : '???'}</b>${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m · ${sp.hp} HP · 🪙${fmt(sp.value)}` +
       (sp.wreck ? `<br><i>Only near shipwrecks</i>` :
-       sp.boat > Math.max(0, S.lv.boat) ? `<br><i>Needs ${BOATS[sp.boat].name}</i>` : ''));
+       sp.tier > tier() ? `<br><i>Needs ${BOATS[sp.tier].name}</i>` : '') +
+      (known ? `<span class="gfact">${sp.fact}</span>` : ''));
     el.appendChild(d);
   });
 }
@@ -348,6 +616,22 @@ $('resetBtn').onclick = () => {
 };
 
 // ======================================================================
+//  FISH FACTS (bottom right while at sea)
+// ======================================================================
+let factTimer = 0;
+function showFact(sp, caught) {
+  $('factTitle').textContent = caught ? `🎣 ${sp.name}` : `🐟 Fish fact: ${sp.name}`;
+  $('factText').textContent = sp.fact;
+  const box = $('fact');
+  box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop');
+  factTimer = 0;
+}
+function randomFact() {
+  const pool = SPECIES.filter(s => s.tier <= tier() + 1);
+  showFact(pool[Math.floor(Math.random() * pool.length)], false);
+}
+
+// ======================================================================
 //  SEA SCREEN
 // ======================================================================
 const cv = $('game');
@@ -357,21 +641,20 @@ let fish = [], floats = [], bubbles = [], clouds = [], wrecks = [];
 const keys = {};
 const BOAT_X = 560;
 const player = { x: BOAT_X, targetX: null, facing: -1 };
-const lure = { active:false, reeling:false, x:0, y:0, hooked:null };
-let pointerScreen = null;   // pointer in screen space; turned into a world target every frame
-let camY = 0;               // how far the camera has scrolled down into the deep
+const lure = { active:false, reeling:false, x:0, y:0, hooked:null, diving:false };
+let pointerScreen = null;
+let camY = 0;
 let msgCooldown = 0;
 let wreckTimer = 0;
 
-function boatW() { return G().boat.w; }
+function boatW() { return BOATS[tier()].w; }
 function deckY() { return SURF - 8 + Math.sin(T * 1.6) * 2; }
 function fishingZone() { return player.x <= BOAT_X - boatW() / 2 + boatW() * 0.38; }
 function filletZone()  { return player.x >= BOAT_X + boatW() / 2 - boatW() * 0.32; }
 function rodTip() { return { x: player.x - 52, y: deckY() - 58 }; }
 function bucketCount() { return S.bucket.length + (lure.hooked ? 1 : 0); }
-function bucketFull() { return bucketCount() >= G().bucket.cap; }
-function boatLv() { return Math.max(0, S.lv.boat); }
-function lureReach() { return G().line.len - 60; }
+function bucketFull() { return bucketCount() >= G().cap; }
+function lureReach() { return G().len - 60; }
 
 function enterSea() {
   $('dock').classList.add('hidden');
@@ -381,21 +664,21 @@ function enterSea() {
   clouds = Array.from({ length: 5 }, () => ({ x: rand(0, W), y: rand(15, 70), s: rand(0.6, 1.3), v: rand(6, 16) }));
   player.x = BOAT_X; player.targetX = null;
   Object.assign(lure, { active:false, reeling:false, hooked:null });
-  for (let i = 0; i < targetFishCount(); i++) spawnFish(true);
+  while (fish.length < targetFishCount()) spawnFish(true);
 
-  // Shipwrecks are rare: only some trips have one.
   if (Math.random() < WRECK_CHANCE) {
-    const w = { x: rand(170, W - 170), tilt: rand(-0.1, 0.1), flip: Math.random() < 0.5 ? -1 : 1 };
+    const w = { x: rand(190, W - 190), tilt: rand(-0.1, 0.1), flip: Math.random() < 0.5 ? -1 : 1 };
     wrecks.push(w);
     for (let i = 0; i < 7; i++) spawnWreckFish(w);
   }
 
   running = true; last = performance.now();
   updateHud();
+  randomFact();
   if (wrecks.length) {
     const canReach = lureReach() >= SEA_DEPTH - 150;
     toast(`📡 Sonar ping! A shipwreck is resting on the sea floor (${SEA_DEPTH / PX_PER_M} m)` +
-      (canReach ? ' — lots of fish are hiding there!' : '. You need a much longer line to reach it.'), 4200);
+      (canReach ? '. Lots of fish are hiding there!' : '. You need a much longer line to reach it.'), 4200);
   } else {
     toast('Walk to the left side of your boat to start fishing! 🎣');
   }
@@ -411,39 +694,53 @@ function leaveSea() {
   window.scrollTo(0, 0);
   renderDock();
   const raw = S.bucket.filter(f => !f.filleted).length;
-  if (raw) toast(`You still have ${raw} raw fish — fillet them on your boat before selling!`, 3200);
+  if (raw) toast(`You still have ${raw} raw fish. Fillet them on your boat before selling!`, 3200);
 }
 
-function targetFishCount() { return 24 + boatLv() * 5; }
+function targetFishCount() { return 30 + tier() * 5; }
 
-function makeFish(sp, x, baseY, dir) {
+function makeFish(sp, x, baseY, dir, speed) {
   return {
     sp, dir, baseY, y: baseY, x,
     hp: sp.hp, maxHp: sp.hp,
-    speed: sp.speed * rand(0.75, 1.2),
-    phase: rand(0, 6.28), amp: rand(3, 9),
+    speed: speed || sp.speed * rand(0.8, 1.15),
+    phase: rand(0, 6.28), amp: rand(3, 8),
     inv: 0, flee: 0, flash: 0, hooked: false, home: null,
   };
 }
 
+// Pick a depth first (so fish fill the whole water column), then a species
+// that lives there. Schooling species arrive as a group swimming together.
 function spawnFish(anywhere) {
-  // pick a depth first so fish are spread through the whole water column,
-  // then pick a species that lives at that depth
-  const pool = SPECIES.filter(s => !s.wreck && s.boat <= boatLv());
+  const pool = SPECIES.filter(s => !s.wreck && s.tier <= tier());
   const depth = rand(15, Math.max(...pool.map(s => s.max)));
   let here = pool.filter(s => depth >= s.min && depth <= s.max);
   if (!here.length) here = [pool.reduce((a, s) => Math.abs((s.min + s.max) / 2 - depth) < Math.abs((a.min + a.max) / 2 - depth) ? s : a)];
   let r = Math.random() * here.reduce((a, s) => a + s.weight, 0), sp = here[0];
   for (const s of here) { r -= s.weight; if (r <= 0) { sp = s; break; } }
   const dir = Math.random() < 0.5 ? 1 : -1;
-  fish.push(makeFish(sp, anywhere ? rand(30, W - 30) : (dir > 0 ? -50 : W + 50), SURF + clamp(depth, sp.min, sp.max), dir));
+  const x0 = anywhere ? rand(60, W - 60) : (dir > 0 ? -70 : W + 70);
+  const y0 = SURF + clamp(depth, sp.min, sp.max);
+  if (sp.school) {
+    const n = Math.round(rand(sp.school[0], sp.school[1]));
+    const speed = sp.speed * rand(0.85, 1.1);
+    for (let i = 0; i < n; i++) {
+      const row = i % 3, col = Math.floor(i / 3);
+      const x = x0 - dir * (col * sp.size * 2.3 + rand(0, sp.size));
+      const y = clamp(y0 + (row - 1) * sp.size * 1.3 + rand(-4, 4), SURF + sp.min, SURF + sp.max);
+      const f = makeFish(sp, x, y, dir, speed);
+      f.amp = rand(2, 4); f.phase = rand(0, 1);
+      fish.push(f);
+    }
+  } else {
+    fish.push(makeFish(sp, x0, y0, dir));
+  }
 }
 
-// Wreck fish hang around the wreck instead of swimming past.
 function spawnWreckFish(w) {
-  const deep = SPECIES.filter(s => !s.wreck && s.boat <= boatLv()).slice(-3);
-  const sp = Math.random() < 0.25 ? speciesById('treasure') : deep[Math.floor(Math.random() * deep.length)];
-  const f = makeFish(sp, w.x + rand(-140, 140), WORLD_H - rand(35, 165), Math.random() < 0.5 ? 1 : -1);
+  const deep = SPECIES.filter(s => !s.wreck && s.tier <= tier()).slice(-3);
+  const sp = Math.random() < 0.3 ? speciesById('goliath') : deep[Math.floor(Math.random() * deep.length)];
+  const f = makeFish(sp, w.x + rand(-150, 150), WORLD_H - rand(40, 170), Math.random() < 0.5 ? 1 : -1);
   f.home = w; f.range = rand(90, 180); f.speed *= 0.6;
   fish.push(f);
 }
@@ -458,14 +755,10 @@ function canvasPoint(e) {
 cv.addEventListener('pointerdown', e => {
   e.preventDefault();
   const p = canvasPoint(e);
-  const worldY = p.y + camY;
-  if (worldY > SURF) {
+  if (p.y + camY > SURF) {
     if (lure.active) { if (!lure.reeling) pointerScreen = p; return; }
-    if (fishingZone()) { cast(p); }
-    else {
-      player.targetX = BOAT_X - boatW() / 2 + 10;
-      say('Walk to the LEFT side of the boat to fish!');
-    }
+    if (fishingZone()) cast(p);
+    else { player.targetX = BOAT_X - boatW() / 2 + 10; say('Walk to the LEFT side of the boat to fish!'); }
   } else {
     if (lure.active) { reelIn(); return; }
     player.targetX = clamp(p.x, BOAT_X - boatW() / 2 + 10, BOAT_X + boatW() / 2 - 10);
@@ -519,7 +812,7 @@ function finishReel(instant) {
     S.bucket.push({ id: f.sp.id, filleted: false, value: 0 });
     S.seen[f.sp.id] = true;
     fish = fish.filter(x => x !== f);
-    if (!instant) addFloat(rodTip().x, rodTip().y - 10, `${f.sp.name} in the bucket!`, '#ffe680');
+    if (!instant) { addFloat(rodTip().x, rodTip().y - 10, `${f.sp.name} in the bucket!`, '#ffe680'); showFact(f.sp, true); }
     save();
     if (bucketFull() && !instant) setTimeout(() => toast('Bucket full! Walk to the right side and fillet your fish 🔪', 3000), 300);
   }
@@ -531,8 +824,9 @@ function finishReel(instant) {
 function update(dt) {
   T += dt;
   msgCooldown -= dt;
+  factTimer += dt;
+  if (factTimer > 16) randomFact();
 
-  // walking (not while the lure is out)
   if (!lure.active) {
     let dx = 0;
     if (keys['arrowleft'] || keys['a']) dx -= 1;
@@ -547,43 +841,38 @@ function update(dt) {
   }
   if (fishingZone()) player.facing = -1;
 
-  // lure
   if (lure.active) {
     const tip = rodTip();
-    const speed = G().rod.speed;
+    const speed = G().speed;
     if (lure.reeling) {
       const dx = tip.x - lure.x, dy = tip.y - lure.y, d = Math.hypot(dx, dy);
       const step = speed * 1.6 * dt;
       if (d <= step + 2) finishReel(false);
       else { lure.x += dx / d * step; lure.y += dy / d * step; }
     } else {
-      // steer toward the pointer (screen point + camera), inside the slack circle, under water
       let tx = pointerScreen ? pointerScreen.x : lure.x;
       let ty = pointerScreen ? pointerScreen.y + camY : lure.y;
       let dx = tx - tip.x, dy = ty - tip.y, d = Math.hypot(dx, dy);
-      const len = G().line.len;
+      const len = G().len;
       if (d > len) { tx = tip.x + dx / d * len; ty = tip.y + dy / d * len; }
       ty = clamp(ty, SURF + 6, WORLD_H - 14);
       tx = clamp(tx, 4, W - 4);
       dx = tx - lure.x; dy = ty - lure.y; d = Math.hypot(dx, dy);
       let vy = 0;
       if (d > 0.5) { const m = Math.min(speed * dt, d); lure.x += dx / d * m; lure.y += dy / d * m; vy = (dy / d * m) / dt; }
-      // diving straight down fast: fish can't bite, so you can get past the small ones
       lure.diving = vy > speed * 0.6;
       if (lure.diving && lure.y > SURF + 150 && !S.toldDive) {
         S.toldDive = true; save();
-        toast('Diving fast! Fish can’t bite a sinking lure — slow down or move sideways to catch one.', 4000);
+        toast('Diving fast! Fish can’t bite a sinking lure. Slow down or move sideways to catch one.', 4000);
       }
       if (Math.random() < dt * (lure.diving ? 10 : 2) && lure.y > SURF) bubbles.push({ x: lure.x, y: lure.y, r: rand(1.5, 3), v: rand(20, 40) });
       if (!lure.diving) checkHits();
     }
   }
 
-  // camera follows the lure down into the deep
   const camTarget = lure.active ? clamp(lure.y - H * 0.45, 0, WORLD_H + 24 - H) : 0;
   camY += (camTarget - camY) * Math.min(1, dt * 4);
 
-  // fish
   for (const f of fish) {
     f.inv -= dt; f.flee -= dt; f.flash -= dt;
     if (f.hooked) { f.x = lure.x + 4; f.y = lure.y + f.sp.size * 0.3; continue; }
@@ -591,13 +880,13 @@ function update(dt) {
       if (f.x > f.home.x + f.range) f.dir = -1;
       if (f.x < f.home.x - f.range) f.dir = 1;
     }
-    f.x += f.dir * f.speed * (f.flee > 0 ? 2.6 : 1) * dt;
+    // a hit fish speeds up a little but keeps swimming the same way
+    f.x += f.dir * f.speed * (f.flee > 0 ? 1.35 : 1) * dt;
     f.y = f.baseY + Math.sin(T * 1.8 + f.phase) * f.amp;
-    if (Math.random() < dt * 0.15) bubbles.push({ x: f.x + f.dir * f.sp.size, y: f.y, r: rand(1, 2.5), v: rand(15, 35) });
+    if (Math.random() < dt * 0.12) bubbles.push({ x: f.x + f.dir * f.sp.size, y: f.y, r: rand(1, 2.5), v: rand(15, 35) });
   }
-  fish = fish.filter(f => f.hooked || f.home || (f.x > -140 && f.x < W + 140));
+  fish = fish.filter(f => f.hooked || f.home || (f.x > -260 && f.x < W + 260));
   while (fish.filter(f => !f.home).length < targetFishCount()) spawnFish(false);
-  // wrecks slowly attract new fish
   wreckTimer += dt;
   if (wreckTimer > 8) {
     wreckTimer = 0;
@@ -617,12 +906,12 @@ function checkHits() {
   if (lure.hooked) return;
   for (const f of fish) {
     if (f.hooked || f.inv > 0) continue;
-    const reach = f.sp.size * 0.85 + 6;
+    const reach = (f.sp.look.eel ? f.sp.size * 0.5 : f.sp.size * 0.8) + 6;
     if (Math.hypot(lure.x - f.x, lure.y - f.y) > reach) continue;
 
-    if (bucketFull()) { say('Bucket full! Fillet and sell your fish first.'); f.flee = 1; f.inv = 1; f.dir = -f.dir; continue; }
+    if (bucketFull()) { say('Bucket full! Fillet and sell your fish first.'); f.inv = 1; continue; }
 
-    const dmg = G().lure.power;
+    const dmg = G().power;
     f.hp -= dmg;
     S.seen[f.sp.id] = true;
     if (f.hp <= 0) {
@@ -632,10 +921,9 @@ function checkHits() {
       addFloat(f.x, f.y - 20, `Caught a ${f.sp.name}!`, '#ffe680');
       updateHud();
     } else {
-      f.inv = 0.6; f.flee = 1.1; f.flash = 0.25;
-      f.dir = Math.sign(f.x - lure.x) || f.dir;
+      f.inv = 0.5; f.flee = 0.8; f.flash = 0.25;
       addFloat(f.x, f.y - 18, `-${dmg}  (${f.hp} left)`, '#ff9b8a');
-      if (f.maxHp >= 3 && f.hp === f.maxHp - dmg) say(`Strong fish! Hit the ${f.sp.name} ${Math.ceil(f.hp / dmg)} more time${Math.ceil(f.hp / dmg) > 1 ? 's' : ''}!`);
+      if (f.hp === f.maxHp - dmg) say(`Strong fish! Hit the ${f.sp.name} ${Math.ceil(f.hp / dmg)} more time${Math.ceil(f.hp / dmg) > 1 ? 's' : ''}!`);
     }
     return;
   }
@@ -647,7 +935,6 @@ function draw() {
   ctx.save();
   ctx.translate(0, -camY);
 
-  // sky
   if (top < SURF) {
     let g = ctx.createLinearGradient(0, 0, 0, SURF);
     g.addColorStop(0, '#5db6ea'); g.addColorStop(1, '#bfe7fb');
@@ -662,13 +949,11 @@ function draw() {
     });
   }
 
-  // water: gets darker the deeper you go
   const g = ctx.createLinearGradient(0, SURF, 0, WORLD_H);
-  g.addColorStop(0, '#2f8fd0'); g.addColorStop(0.1, '#1d5f9a'); g.addColorStop(0.28, '#123d6a');
-  g.addColorStop(0.5, '#0a2547'); g.addColorStop(0.75, '#051429'); g.addColorStop(1, '#020a16');
+  g.addColorStop(0, '#2f8fd0'); g.addColorStop(0.08, '#1d5f9a'); g.addColorStop(0.25, '#123d6a');
+  g.addColorStop(0.45, '#0a2547'); g.addColorStop(0.7, '#051429'); g.addColorStop(1, '#020a16');
   ctx.fillStyle = g; ctx.fillRect(0, Math.max(SURF, top), W, bottom - Math.max(SURF, top) + 40);
 
-  // light rays near the surface
   if (top < SURF + 600) {
     ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = '#fff';
     for (let i = 0; i < 6; i++) {
@@ -678,7 +963,6 @@ function draw() {
     ctx.restore();
   }
 
-  // depth markers
   ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.font = '12px sans-serif'; ctx.textAlign = 'right';
   for (let d = 100; d < SEA_DEPTH; d += 100) {
     const y = SURF + d;
@@ -687,7 +971,6 @@ function draw() {
     ctx.fillText(`${d / PX_PER_M} m`, W - 8, y - 4);
   }
 
-  // sea floor + shipwrecks (only drawn when the camera gets there)
   if (bottom > WORLD_H - 260) {
     wrecks.forEach(drawWreck);
     ctx.fillStyle = '#2a2318';
@@ -705,9 +988,8 @@ function draw() {
     }
   }
 
-  // slack circle while fishing
   if (lure.active || fishingZone()) {
-    const tip = rodTip(), len = G().line.len;
+    const tip = rodTip(), len = G().len;
     ctx.save();
     ctx.beginPath(); ctx.rect(0, SURF, W, WORLD_H - SURF); ctx.clip();
     ctx.setLineDash([6, 8]);
@@ -717,23 +999,20 @@ function draw() {
     ctx.restore();
   }
 
-  // bubbles
   ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1;
   bubbles.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.stroke(); });
 
-  // fish
   for (const f of fish) {
-    if (f.y < top - 60 || f.y > bottom + 60) continue;
+    if (f.y < top - 80 || f.y > bottom + 80 || f.x < -200 || f.x > W + 200) continue;
     const angle = f.hooked ? Math.sin(T * 14) * 0.4 - 0.9 : 0;
     drawFish(ctx, f.x, f.y, f.sp, f.hooked ? -1 : f.dir, T + f.phase, { flash: f.flash > 0, angle });
     if (f.hp < f.maxHp && !f.hooked) {
       const w = 34;
-      ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(f.x - w / 2, f.y - f.sp.size - 12, w, 5);
-      ctx.fillStyle = '#ff6b5b'; ctx.fillRect(f.x - w / 2, f.y - f.sp.size - 12, w * (f.hp / f.maxHp), 5);
+      ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(f.x - w / 2, f.y - f.sp.size * Math.max(0.6, f.sp.look.h * 2) - 14, w, 5);
+      ctx.fillStyle = '#ff6b5b'; ctx.fillRect(f.x - w / 2, f.y - f.sp.size * Math.max(0.6, f.sp.look.h * 2) - 14, w * (f.hp / f.maxHp), 5);
     }
   }
 
-  // fishing line + lure
   const tip = rodTip();
   if (lure.active) {
     ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.3;
@@ -746,7 +1025,6 @@ function draw() {
   if (top < SURF + 40) {
     drawBoat();
     drawPlayer();
-    // surface waves (in front of the hull)
     ctx.fillStyle = 'rgba(47,143,208,.55)';
     ctx.beginPath(); ctx.moveTo(0, SURF + 14);
     for (let x = 0; x <= W; x += 10) ctx.lineTo(x, SURF + Math.sin(x * 0.03 + T * 2) * 3);
@@ -756,7 +1034,6 @@ function draw() {
     for (let x = 0; x <= W; x += 10) { const y = SURF + Math.sin(x * 0.03 + T * 2) * 3; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.stroke();
 
-    // zone labels
     ctx.textAlign = 'center'; ctx.font = 'bold 13px sans-serif';
     const left = BOAT_X - boatW() / 2, right = BOAT_X + boatW() / 2;
     if (!lure.active) {
@@ -769,7 +1046,6 @@ function draw() {
     }
   }
 
-  // floating text
   ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
   floats.forEach(f => {
     ctx.globalAlpha = Math.min(1, f.life * 1.5);
@@ -779,23 +1055,21 @@ function draw() {
   ctx.globalAlpha = 1;
   ctx.restore();
 
-  // ---- screen-space: darkness of the deep, lit only around your lure ----
-  const dark = clamp((camY - 250) / 1300, 0, 0.82);
+  const dark = clamp((camY - 300) / 1700, 0, 0.84);
   if (dark > 0) {
     const lx = lure.active ? lure.x : W / 2, ly = lure.active ? lure.y - camY : H / 2;
-    const r = 200 + S.lv.lure * 45;
+    const r = 210 + tier() * 25 + S.lv.lure * 8;
     const rg = ctx.createRadialGradient(lx, ly, 40, lx, ly, r);
     rg.addColorStop(0, 'rgba(0,4,14,0)');
     rg.addColorStop(1, `rgba(0,4,14,${dark})`);
     ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
   }
 
-  // depth gauge
   if (lure.active && lure.y > SURF) {
     const m = Math.round((lure.y - SURF) / PX_PER_M);
     const maxM = Math.round(Math.min(SEA_DEPTH, lureReach()) / PX_PER_M);
     ctx.fillStyle = 'rgba(0,0,0,.45)';
-    ctx.fillRect(12, 12, 170, 30);
+    ctx.fillRect(12, 12, 176, 30);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(`⬇ ${m} m  (max ${maxM} m)`, 22, 33);
   }
@@ -806,35 +1080,30 @@ function drawWreck(w) {
   ctx.translate(w.x, WORLD_H - 12);
   ctx.rotate(w.tilt);
   ctx.scale(w.flip, 1);
-  // hull
   ctx.fillStyle = '#3d2b1c';
   ctx.beginPath();
   ctx.moveTo(-160, 4); ctx.lineTo(-178, -58); ctx.lineTo(120, -66);
   ctx.quadraticCurveTo(180, -60, 168, -22); ctx.lineTo(140, 4); ctx.closePath(); ctx.fill();
   ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2;
   for (let y = -50; y < 0; y += 12) { ctx.beginPath(); ctx.moveTo(-170, y); ctx.lineTo(160, y - 4); ctx.stroke(); }
-  // broken hole + portholes
   ctx.fillStyle = '#05080c';
   ctx.beginPath(); ctx.ellipse(-50, -30, 30, 17, 0.3, 0, 7); ctx.fill();
   [[30, -40], [70, -42], [110, -44]].forEach(([x, y]) => {
     ctx.fillStyle = '#7a6a45'; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill();
     ctx.fillStyle = '#0a1420'; ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill();
   });
-  // broken mast + torn sail
   ctx.strokeStyle = '#2a1d12'; ctx.lineWidth = 8; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(10, -64); ctx.lineTo(44, -200); ctx.stroke();
   ctx.lineWidth = 5;
   ctx.beginPath(); ctx.moveTo(22, -150); ctx.lineTo(84, -164); ctx.stroke();
   ctx.fillStyle = 'rgba(190,180,150,.3)';
   ctx.beginPath(); ctx.moveTo(30, -146); ctx.lineTo(80, -158); ctx.lineTo(70 + Math.sin(T) * 5, -100); ctx.lineTo(50, -112); ctx.lineTo(38, -96); ctx.closePath(); ctx.fill();
-  // treasure chest
   ctx.fillStyle = '#5c3a1a'; ctx.fillRect(-135, -18, 36, 20);
   ctx.fillStyle = '#7a4c22'; ctx.beginPath(); ctx.ellipse(-117, -18, 18, 8, 0, Math.PI, 0); ctx.fill();
   ctx.fillStyle = '#e8b923'; ctx.fillRect(-119, -16, 4, 6);
   const sp = (Math.sin(T * 3) + 1) / 2;
   ctx.fillStyle = `rgba(255,230,120,${0.3 + sp * 0.6})`;
   ctx.beginPath(); ctx.arc(-108, -24, 2 + sp * 2, 0, 7); ctx.arc(-126, -20, 1.5 + (1 - sp) * 2, 0, 7); ctx.fill();
-  // barnacle weed on the hull
   ctx.strokeStyle = '#1f5a34'; ctx.lineWidth = 3;
   for (let i = 0; i < 6; i++) {
     const x = -150 + i * 55;
@@ -844,10 +1113,10 @@ function drawWreck(w) {
 }
 
 function drawLure(x, y) {
-  const l = G().lure;
+  const col = LURE_COLORS[tier()];
   ctx.save(); ctx.translate(x, y);
-  if (S.lv.lure >= 3) { ctx.fillStyle = l.color + '55'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fill(); }
-  ctx.fillStyle = l.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+  if (tier() >= 4) { ctx.fillStyle = col + '55'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fill(); }
+  ctx.fillStyle = col; ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.ellipse(0, 0, 4, 7, Math.sin(T * 6) * 0.4, 0, 7); ctx.fill(); ctx.stroke();
   ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(2, 9, 4, Math.PI * 0.9, Math.PI * 0.1, true); ctx.stroke();
@@ -855,44 +1124,54 @@ function drawLure(x, y) {
 }
 
 function drawBoat() {
-  const w = boatW(), y = deckY(), l = BOAT_X - w / 2, r = BOAT_X + w / 2, lv = boatLv();
+  const w = boatW(), y = deckY(), l = BOAT_X - w / 2, r = BOAT_X + w / 2, lv = tier();
   ctx.save();
   if (lv === 0) {
-    for (let i = 0; i < 4; i++) {
-      ctx.fillStyle = i % 2 ? '#8a5a2b' : '#9c6a36';
-      ctx.fillRect(l, y + i * 4, w, 5);
-    }
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#8a5a2b' : '#9c6a36'; ctx.fillRect(l, y + i * 4, w, 5); }
     ctx.fillStyle = '#6e4420';
     for (let x = l + 6; x < r; x += 22) ctx.fillRect(x, y, 3, 18);
-    ctx.strokeStyle = '#d9c08a'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(l + 12, y + 2); ctx.lineTo(l + 12, y + 16); ctx.moveTo(r - 12, y + 2); ctx.lineTo(r - 12, y + 16); ctx.stroke();
   } else {
-    const hullH = 14 + lv * 8;
-    const colors = [null, ['#b5542f', '#8c3e20'], ['#f4f4f4', '#2a74c9'], ['#c0392b', '#1d2b3a']][lv];
+    const hullH = 14 + lv * 5;
+    const colors = [null, ['#b5542f', '#8c3e20'], ['#a9b3ba', '#5c6a75'], ['#f4f4f4', '#2a74c9'],
+      ['#c0392b', '#1d2b3a'], ['#f2f2f2', '#e8742a'], ['#1f2d44', '#f28c28']][lv];
     ctx.fillStyle = colors[0];
     ctx.beginPath();
     ctx.moveTo(l - 10, y); ctx.lineTo(r + 14, y);
     ctx.lineTo(r - 8, y + hullH); ctx.lineTo(l + 12, y + hullH); ctx.closePath(); ctx.fill();
     ctx.fillStyle = colors[1]; ctx.fillRect(l - 4, y + 3, w + 12, 4);
-    if (lv >= 2) {
-      const cw = w * 0.22, cx = BOAT_X - cw / 2 + 10;
-      ctx.fillStyle = lv === 3 ? '#e8e8e8' : '#fff';
-      ctx.fillRect(cx, y - 34, cw, 34);
-      ctx.fillStyle = '#7fc3f0'; ctx.fillRect(cx + 6, y - 28, cw - 12, 10);
-      ctx.fillStyle = colors[1]; ctx.fillRect(cx - 4, y - 38, cw + 8, 5);
+    if (lv === 1) {   // oars
+      ctx.strokeStyle = '#7a4f24'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(BOAT_X - 10, y - 4); ctx.lineTo(BOAT_X - 40, y + 26); ctx.stroke();
     }
-    if (lv === 3) {
-      ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(BOAT_X + 10, y - 38); ctx.lineTo(BOAT_X + 10, y - 90); ctx.stroke();
-      ctx.fillStyle = '#ffd34d';
-      ctx.beginPath(); ctx.moveTo(BOAT_X + 10, y - 90); ctx.lineTo(BOAT_X + 40 + Math.sin(T * 5) * 3, y - 82); ctx.lineTo(BOAT_X + 10, y - 74); ctx.fill();
+    if (lv === 2) {   // outboard motor
+      ctx.fillStyle = '#333'; ctx.fillRect(r + 8, y - 16, 14, 18);
+      ctx.fillStyle = '#555'; ctx.fillRect(r + 12, y + 2, 5, 20);
+    }
+    if (lv >= 3) {    // cabin
+      const cw = w * 0.24, cx = BOAT_X - cw / 2 + 10, chH = 30 + lv * 3;
+      ctx.fillStyle = lv === 6 ? '#e9edf2' : '#fff';
+      ctx.fillRect(cx, y - chH, cw, chH);
+      ctx.fillStyle = '#7fc3f0'; ctx.fillRect(cx + 6, y - chH + 6, cw - 12, 10);
+      ctx.fillStyle = colors[1]; ctx.fillRect(cx - 4, y - chH - 4, cw + 8, 5);
+      if (lv >= 4) {  // mast + flag
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(BOAT_X + 10, y - chH - 4); ctx.lineTo(BOAT_X + 10, y - chH - 56); ctx.stroke();
+        ctx.fillStyle = '#ffd34d';
+        ctx.beginPath(); ctx.moveTo(BOAT_X + 10, y - chH - 56); ctx.lineTo(BOAT_X + 40 + Math.sin(T * 5) * 3, y - chH - 48); ctx.lineTo(BOAT_X + 10, y - chH - 40); ctx.fill();
+      }
+      if (lv >= 5) {  // crane
+        ctx.strokeStyle = colors[1]; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(BOAT_X - cw / 2, y - chH); ctx.lineTo(BOAT_X - cw / 2 - 50, y - chH - 40); ctx.stroke();
+        ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(BOAT_X - cw / 2 - 50, y - chH - 40); ctx.lineTo(BOAT_X - cw / 2 - 50, y - 20); ctx.stroke();
+      }
+      if (lv === 6) { // radar dome
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx + cw - 10, y - chH - 6, 9, Math.PI, 0); ctx.fill();
+      }
     }
   }
-  // cutting board on the right
   ctx.fillStyle = '#e2c08a'; ctx.fillRect(r - 34, y - 8, 28, 8);
   ctx.fillStyle = '#bbb'; ctx.fillRect(r - 28, y - 12, 14, 3);
   ctx.fillStyle = '#5c3a1a'; ctx.fillRect(r - 15, y - 13, 6, 4);
-  // bucket
   const bx = BOAT_X + w * 0.12;
   ctx.fillStyle = '#9aa4ad';
   ctx.beginPath(); ctx.moveTo(bx - 9, y - 16); ctx.lineTo(bx + 9, y - 16); ctx.lineTo(bx + 7, y); ctx.lineTo(bx - 7, y); ctx.fill();
@@ -922,7 +1201,7 @@ function drawPlayer() {
     const tip = rodTip();
     ctx.strokeStyle = '#2b3a55'; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(x, y - 42); ctx.lineTo(x - 12, y - 38); ctx.stroke();
-    ctx.strokeStyle = ['#8b5a2b', '#c9a65b', '#4aa3df', '#333', '#d4a017'][Math.max(0, S.lv.rod)];
+    ctx.strokeStyle = ROD_COLORS[tier()];
     ctx.lineWidth = 3;
     const bend = lure.hooked ? 10 + Math.sin(T * 20) * 4 : 0;
     ctx.beginPath(); ctx.moveTo(x - 10, y - 32);
@@ -941,14 +1220,13 @@ function drawPlayer() {
 
 // ---------------- HUD ----------------
 function updateHud() {
-  $('seaCoins').textContent = `🪙 ${S.coins}`;
-  const g = G();
-  $('gearPill').textContent = `${g.boat.name} · ${g.rod.name} · ${g.lure.name} (${g.lure.power} dmg) · ${g.line.name} · ${g.knife.name}`;
+  $('seaCoins').textContent = `🪙 ${fmt(S.coins)}`;
+  $('gearPill').textContent = `${BOATS[tier()].name} · ${gearName('rod')} · ${gearName('lure')} (${G().power} dmg) · ${gearName('line')} · ${gearName('knife')}`;
   updateHudLive(true);
 }
 let lastHudKey = '';
 function updateHudLive(force) {
-  const cap = G().bucket.cap, n = S.bucket.length;
+  const cap = G().cap, n = S.bucket.length;
   const raw = S.bucket.some(f => !f.filleted);
   const key = [n, cap, lure.active, lure.reeling, filletZone(), raw].join();
   if (key === lastHudKey && !force) return;
@@ -970,29 +1248,33 @@ function loop(now) {
 }
 
 // ======================================================================
-//  FILLET STATION — drag the knife across the fish at the right speed
+//  FILLET STATION — drag the knife across the fish.
+//  Every cut across the fish counts. A cut at the right speed is clean;
+//  a cut that's too fast or too slow makes the fish bleed and lowers
+//  what the fillet is worth.
 // ======================================================================
 const fc = $('filletCanvas'), fx = fc.getContext('2d');
 const FW = fc.width, FH = fc.height;                 // 420 x 250
-const FISH = { x: 210, y: 92, rx: 92, ry: 42 };      // where the fish lies on the board
+const FISH = { x: 210, y: 92, rx: 100, ry: 46 };
 const METER = { x: 24, y: 212, w: 372, h: 16, max: 1600 };
-let fillet = null;      // { item, sp, chops, cuts:[], done }
-let stroke = null;      // the drag in progress
+const BAD_CUT_PENALTY = 0.2, MIN_QUALITY = 0.4;
+let fillet = null;
+let stroke = null;
 let liveSpeed = 0, shownSpeed = null;
-let verdict = null;     // { text, color, life }
-let failStroke = null;  // a bad cut, shown briefly in red
+let verdict = null;
 let knifeAt = null;
+let blood = [];          // dripping drops
+let pools = [];          // stains on the board / fish
 
 function zoneFor(sp) {
-  const z = G().knife.zone / 2;
-  return [Math.max(60, sp.cut[0] - z), sp.cut[1] + z];
+  const half = 330 + G().knife.zone / 2;          // wide, forgiving window
+  return [Math.max(40, sp.cut - half), sp.cut + half];
 }
 function insideFish(p) {
   return ((p.x - FISH.x) / FISH.rx) ** 2 + ((p.y - FISH.y) / FISH.ry) ** 2 <= 1;
 }
 function speedWord(sp) {
-  const mid = (sp.cut[0] + sp.cut[1]) / 2;
-  return mid < 450 ? 'slow and careful' : mid < 750 ? 'steady' : mid < 1000 ? 'quick' : 'very fast';
+  return sp.cut < 450 ? 'slow and gentle' : sp.cut < 700 ? 'at a steady speed' : sp.cut < 900 ? 'quickly' : 'very fast';
 }
 
 function openFillet() {
@@ -1009,7 +1291,7 @@ function closeFillet() {
   if (S.bucket.length && S.bucket.every(f => f.filleted) && bucketFull()) toast('All filleted! Sail back to the dock to sell ⚓', 3000);
 }
 function nextFilletFish() {
-  stroke = null; shownSpeed = null; failStroke = null;
+  stroke = null; shownSpeed = null; blood = []; pools = [];
   const item = S.bucket.find(f => !f.filleted);
   if (!item) {
     fillet = { done: true, cuts: [] };
@@ -1017,10 +1299,10 @@ function nextFilletFish() {
     $('filletBar').style.width = '100%';
     return;
   }
-  fillet = { item, sp: speciesById(item.id), chops: 0, cuts: [], done: false };
+  fillet = { item, sp: speciesById(item.id), chops: 0, bad: 0, cuts: [], done: false };
   const k = G().knife;
   const raw = S.bucket.filter(f => !f.filleted).length;
-  $('filletInfo').textContent = `${fillet.sp.name}: ${k.chops} clean cut${k.chops > 1 ? 's' : ''} needed — cut it ${speedWord(fillet.sp)} (${raw} fish left)`;
+  $('filletInfo').textContent = `${fillet.sp.name}: ${k.chops} cut${k.chops > 1 ? 's' : ''}, cut it ${speedWord(fillet.sp)} (${raw} fish left)`;
   $('filletBar').style.width = '0%';
 }
 
@@ -1051,32 +1333,50 @@ fc.addEventListener('pointerup', endStroke);
 fc.addEventListener('pointercancel', () => { stroke = null; });
 fc.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && !stroke) knifeAt = null; });
 
-function say2(text, color) { verdict = { text, color, life: 1.4 }; }
+function say2(text, color) { verdict = { text, color, life: 1.5 }; }
+
+function bleed(pts) {
+  const inside = pts.filter(insideFish);
+  const src = inside.length ? inside : pts;
+  for (let i = 0; i < 14; i++) {
+    const p = src[Math.floor(Math.random() * src.length)];
+    blood.push({ x: p.x + rand(-4, 4), y: p.y + rand(-3, 3), vy: rand(10, 40), r: rand(2, 4.5), life: rand(1.5, 3) });
+  }
+  pools.push({ x: rand(FISH.x - 60, FISH.x + 60), y: FISH.y + FISH.ry + rand(4, 18), r: 0, max: rand(14, 26) });
+}
 
 function endStroke() {
   if (!stroke || !fillet || fillet.done) { stroke = null; return; }
   const s = stroke; stroke = null;
-  if (s.inLen < 55) { say2('Drag the knife all the way across the fish!', '#ffffff'); return; }
+  if (s.inLen < 45) { say2('Drag the knife across the fish!', '#ffffff'); return; }
   const speed = s.inLen / Math.max(0.02, s.inTime);
   shownSpeed = speed;
   const [lo, hi] = zoneFor(fillet.sp);
-  if (speed < lo) { say2('Too slow — the knife got stuck!', '#ffb3a7'); failStroke = { pts: s.pts, life: 0.8 }; return; }
-  if (speed > hi) { say2('Too fast — you slipped!', '#ffb3a7'); failStroke = { pts: s.pts, life: 0.8 }; return; }
+  const clean = speed >= lo && speed <= hi;
+  fillet.cuts.push({ pts: s.pts, clean });
+  fillet.chops++;
+  if (clean) say2(fillet.chops < G().knife.chops ? 'Clean cut! ✔' : 'Nice!', '#9effa8');
+  else {
+    fillet.bad++;
+    bleed(s.pts);
+    say2(speed < lo ? 'Too slow! It’s bleeding 🩸' : 'Too fast! It’s bleeding 🩸', '#ff8f80');
+  }
 
   const k = G().knife;
-  fillet.cuts.push(s.pts);
-  fillet.chops++;
   $('filletBar').style.width = `${(fillet.chops / k.chops) * 100}%`;
-  if (fillet.chops < k.chops) { say2('Clean cut! ✔', '#9effa8'); return; }
+  if (fillet.chops < k.chops) return;
 
-  const value = Math.round(fillet.sp.value * k.mult);
+  const quality = Math.max(MIN_QUALITY, 1 - fillet.bad * BAD_CUT_PENALTY);
+  const value = Math.round(fillet.sp.value * k.mult * quality);
   fillet.item.filleted = true;
   fillet.item.value = value;
+  fillet.item.quality = quality;
   save();
-  say2('Perfect fillet! 🍣', '#9effa8');
-  $('filletInfo').textContent = `🍣 ${fillet.sp.name} fillets — worth 🪙 ${value}!`;
+  $('filletInfo').textContent = quality < 1
+    ? `🩸 ${fillet.sp.name} fillets (bled, ${Math.round(quality * 100)}% value): 🪙 ${fmt(value)}`
+    : `🍣 Perfect ${fillet.sp.name} fillets: 🪙 ${fmt(value)}!`;
   fillet.done = true; fillet.showFillet = true;
-  setTimeout(() => { if (!$('fillet').classList.contains('hidden')) nextFilletFish(); }, 900);
+  setTimeout(() => { if (!$('fillet').classList.contains('hidden')) nextFilletFish(); }, 1100);
 }
 
 function drawPath(pts) {
@@ -1087,46 +1387,61 @@ function drawPath(pts) {
 
 function filletLoop() {
   if ($('fillet').classList.contains('hidden') || !fillet) return;
-  const t = performance.now() / 1000;
   fx.clearRect(0, 0, FW, FH);
   fx.strokeStyle = 'rgba(120,80,30,.25)'; fx.lineWidth = 1;
-  for (let i = 0; i < 8; i++) { fx.beginPath(); fx.moveTo(0, 14 + i * 24); fx.bezierCurveTo(140, 4 + i * 24, 280, 24 + i * 24, 420, 12 + i * 24); fx.stroke(); }
+  for (let i = 0; i < 9; i++) { fx.beginPath(); fx.moveTo(0, 14 + i * 24); fx.bezierCurveTo(140, 4 + i * 24, 280, 24 + i * 24, 420, 12 + i * 24); fx.stroke(); }
+
+  // blood pools on the board
+  pools.forEach(p => {
+    p.r = Math.min(p.max, p.r + 0.4);
+    fx.fillStyle = 'rgba(150,15,15,.55)';
+    fx.beginPath(); fx.ellipse(p.x, p.y, p.r * 1.6, p.r * 0.55, 0, 0, 7); fx.fill();
+  });
 
   if (fillet.sp && !fillet.showFillet) {
-    fx.save(); fx.translate(FISH.x + 14, FISH.y); fx.scale(78 / fillet.sp.size, 78 / fillet.sp.size);
-    drawFish(fx, 0, 0, fillet.sp, 1, 0);
+    const sp = fillet.sp;
+    const scale = Math.min(84 / sp.size, (sp.look.bill ? 64 : 84) / sp.size);
+    fx.save(); fx.translate(FISH.x + (sp.look.bill ? -30 : 14), FISH.y); fx.scale(scale, scale);
+    drawFish(fx, 0, 0, sp, 1, 0);
     fx.restore();
-    // good cuts stay on the fish
     fx.save();
     fx.beginPath(); fx.ellipse(FISH.x, FISH.y, FISH.rx, FISH.ry, 0, 0, 7); fx.clip();
-    fx.strokeStyle = '#a01f17'; fx.lineWidth = 4; fx.lineCap = 'round';
-    fillet.cuts.forEach(drawPath);
+    fx.lineCap = 'round';
+    fillet.cuts.forEach(c => {
+      if (c.clean) { fx.strokeStyle = '#a01f17'; fx.lineWidth = 3; }
+      else { fx.strokeStyle = 'rgba(200,20,20,.85)'; fx.lineWidth = 8; }
+      drawPath(c.pts);
+    });
     fx.restore();
   } else if (fillet.sp) {
+    const q = fillet.item.quality || 1;
     fx.lineWidth = 2;
     [-1, 1].forEach(s => {
-      fx.fillStyle = '#f7a58c'; fx.strokeStyle = '#e07a5f';
+      fx.fillStyle = q < 1 ? '#e98a76' : '#f7a58c'; fx.strokeStyle = '#e07a5f';
       fx.beginPath(); fx.ellipse(210 + s * 72, FISH.y, 62, 28, s * 0.15, 0, 7); fx.fill(); fx.stroke();
       fx.strokeStyle = 'rgba(255,255,255,.6)';
       for (let i = -2; i <= 2; i++) { fx.beginPath(); fx.moveTo(210 + s * 72 + i * 16, FISH.y - 20); fx.lineTo(210 + s * 72 + i * 16 + 8, FISH.y + 20); fx.stroke(); }
+      if (q < 1) {
+        fx.fillStyle = 'rgba(150,10,10,.6)';
+        for (let i = 0; i < Math.round((1 - q) * 20); i++) { fx.beginPath(); fx.arc(210 + s * 72 + rand(-40, 40), FISH.y + rand(-15, 15), rand(2, 5), 0, 7); fx.fill(); }
+      }
     });
   } else {
     fx.font = '48px sans-serif'; fx.textAlign = 'center'; fx.fillText('🍣🍣🍣', 210, 110);
   }
 
-  // bad cut fades out
-  if (failStroke) {
-    failStroke.life -= 1 / 60;
-    fx.strokeStyle = `rgba(210,40,30,${Math.max(0, failStroke.life)})`; fx.lineWidth = 3; fx.setLineDash([6, 6]);
-    drawPath(failStroke.pts); fx.setLineDash([]);
-    if (failStroke.life <= 0) failStroke = null;
-  }
-  // live knife trail
+  // dripping blood
+  blood.forEach(b => {
+    b.life -= 1 / 60; b.y += b.vy / 60; b.vy += 1.2;
+    fx.fillStyle = `rgba(170,10,10,${clamp(b.life, 0, 1)})`;
+    fx.beginPath(); fx.ellipse(b.x, b.y, b.r * 0.8, b.r * 1.2, 0, 0, 7); fx.fill();
+  });
+  blood = blood.filter(b => b.life > 0 && b.y < FH - 30);
+
   if (stroke && stroke.pts.length > 1) {
     fx.strokeStyle = 'rgba(255,255,255,.85)'; fx.lineWidth = 3; fx.lineCap = 'round';
     drawPath(stroke.pts.slice(-14));
   }
-  // the knife follows your finger / mouse
   if (knifeAt && fillet.sp && !fillet.done) {
     fx.save(); fx.translate(knifeAt.x, knifeAt.y); fx.rotate(-0.5);
     fx.fillStyle = '#dfe5ea'; fx.strokeStyle = '#8a959e'; fx.lineWidth = 1;
@@ -1135,7 +1450,6 @@ function filletLoop() {
     fx.restore();
   }
 
-  // speed meter
   if (fillet.sp) {
     const [lo, hi] = zoneFor(fillet.sp);
     const X = v => METER.x + clamp(v / METER.max, 0, 1) * METER.w;
@@ -1146,7 +1460,9 @@ function filletLoop() {
     fx.fillStyle = '#3d2610'; fx.font = 'bold 11px sans-serif';
     fx.textAlign = 'left'; fx.fillText('slow', METER.x, METER.y - 4);
     fx.textAlign = 'right'; fx.fillText('fast', METER.x + METER.w, METER.y - 4);
-    fx.textAlign = 'center'; fx.fillText('knife speed', METER.x + METER.w / 2, METER.y + METER.h + 14);
+    fx.textAlign = 'center';
+    const bad = fillet.bad || 0;
+    fx.fillText(bad ? `knife speed · ${bad} messy cut${bad > 1 ? 's' : ''} (−${Math.round(Math.min(1 - MIN_QUALITY, bad * BAD_CUT_PENALTY) * 100)}% value)` : 'knife speed', METER.x + METER.w / 2, METER.y + METER.h + 14);
     const v = stroke ? liveSpeed : shownSpeed;
     if (v != null) {
       const nx = X(v), good = v >= lo && v <= hi;
@@ -1156,7 +1472,6 @@ function filletLoop() {
     }
   }
 
-  // verdict
   if (verdict) {
     verdict.life -= 1 / 60;
     fx.globalAlpha = clamp(verdict.life * 2, 0, 1);
