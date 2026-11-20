@@ -64,6 +64,10 @@ const SPECIES = [
   { id:'goliath', name:'Goliath Grouper', min:2380, max:2470, value:4500, hp:45, size:40, speed:30, tier:6, weight:0, cut:450, wreck:true,
     look:{ h:.42, tail:'round', back:'#6f5f3a', side:'#9c8a5a', belly:'#cdbf92', fin:'#6a5a36', pattern:'grouperbars', bigmouth:true },
     fact:'Goliath groupers can weigh up to 800 pounds and love to live around shipwrecks.' },
+  // the monster of the deep: only one, at the very bottom. It comes back after you catch it.
+  { id:'squid', name:'Giant Squid', min:2400, max:2460, value:15000, hp:150, size:70, speed:22, tier:6, weight:0, cut:500, monster:true,
+    look:{ squid:true, h:.3, back:'#9c3b30', side:'#c25a49', belly:'#e5a493', fin:'#8a3229' },
+    fact:'Giant squid have the biggest eyes of any animal, about the size of a dinner plate.' },
 ];
 const speciesById = id => SPECIES.find(s => s.id === id);
 
@@ -122,6 +126,12 @@ const CANNONS = [
 const RIVAL_NAMES = ['Captain Barnacle', 'Salty Sue', 'One-Eyed Pete', 'Rusty Ray', 'Big Bertha', 'Fishhook Fran', 'Old Man Moby', 'Gill Gordon', 'Mean Marlene', 'Skipper Skip'];
 const RIVAL_COLORS = [['#6d3fa0', '#3e2160'], ['#2f7d4a', '#1c4a2c'], ['#b0452f', '#6a2318'], ['#3a5f8f', '#203752'], ['#8a6d2a', '#4f3d14']];
 const hullHP = () => 12 + tier() * 6;
+
+// Supplies come in packs of 10 from the market. Each cast uses 1 bait; each cannon shot uses 1 cannonball.
+const PACK = 10;
+const BAIT_PRICES = [10, 20, 40, 80, 150, 300, 600];   // better boats fish deeper, so bait costs more
+const baitPrice = () => BAIT_PRICES[tier()];
+const BALL_PRICE = 60;
 const statText = {
   rod:    g => `Lure speed ${STAT.rod(g)}`,
   lure:   g => `Hits fish for ${STAT.lure(g)} damage`,
@@ -135,7 +145,7 @@ const statText = {
 // ======================================================================
 const SAVE_KEY = 'hook-line-sinker-v2';
 function freshState() {
-  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, hooks:0, cannon:0, bucket:[], seen:{}, earned:0 };
+  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, hooks:0, cannon:0, bait:0, balls:0, bucket:[], seen:{}, earned:0 };
 }
 function load() {
   try {
@@ -314,6 +324,50 @@ function drawEel(c, sp, v, L, t, flash) {
   c.fillStyle = '#111'; c.beginPath(); c.arc(L * 0.91, -L * 0.015, L * 0.016, 0, 7); c.fill();
 }
 
+function drawSquid(c, v, L, t, flash) {
+  // giant squid: pointed mantle with fins at the back, big eye, 8 arms and 2 long tentacles in front
+  const wave = (i, u) => Math.sin(t * 2.2 + i * 0.9 - u * 4) * L * 0.07 * u;
+  c.lineCap = 'round';
+  // two long feeding tentacles with clubs
+  [-1, 1].forEach((s, i) => {
+    c.strokeStyle = v.fin; c.lineWidth = Math.max(1.5, L * 0.025);
+    c.beginPath();
+    for (let k = 0; k <= 16; k++) { const u = k / 16; const x = L * (0.35 + u * 1.35), y = s * L * 0.05 + wave(i + 3, u) * 1.4; k ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.stroke();
+    c.fillStyle = v.fin;
+    c.beginPath(); c.ellipse(L * 1.72, s * L * 0.05 + wave(i + 3, 1) * 1.4, L * 0.1, L * 0.04, 0, 0, 7); c.fill();
+  });
+  // eight arms
+  for (let i = 0; i < 8; i++) {
+    const spread = (i - 3.5) * 0.045;
+    c.strokeStyle = i % 2 ? v.back : v.side; c.lineWidth = Math.max(2, L * (0.05 - i * 0.002));
+    c.beginPath();
+    for (let k = 0; k <= 12; k++) { const u = k / 12; const x = L * (0.35 + u * 0.85), y = L * spread * (1 + u * 2) + wave(i, u); k ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.stroke();
+  }
+  // fins at the tip of the mantle
+  c.fillStyle = v.fin;
+  c.beginPath(); c.moveTo(-L * 0.75, 0); c.lineTo(-L * 1.12, -L * 0.28 + Math.sin(t * 3) * 3); c.lineTo(-L * 1.2, 0); c.lineTo(-L * 1.12, L * 0.28 - Math.sin(t * 3) * 3); c.closePath(); c.fill();
+  // mantle
+  const g = c.createLinearGradient(0, -L * 0.25, 0, L * 0.25);
+  g.addColorStop(0, v.back); g.addColorStop(0.5, v.side); g.addColorStop(1, v.belly);
+  c.fillStyle = flash ? '#ffffff' : g;
+  c.beginPath();
+  c.moveTo(-L * 1.15, 0);
+  c.quadraticCurveTo(-L * 0.6, -L * 0.3, L * 0.05, -L * 0.24);
+  c.quadraticCurveTo(L * 0.42, -L * 0.2, L * 0.42, 0);
+  c.quadraticCurveTo(L * 0.42, L * 0.2, L * 0.05, L * 0.24);
+  c.quadraticCurveTo(-L * 0.6, L * 0.3, -L * 1.15, 0);
+  c.fill();
+  // spots
+  c.fillStyle = 'rgba(90,20,15,.35)';
+  for (let i = 0; i < 14; i++) { c.beginPath(); c.arc(-L * (0.9 - (i * 13 % 90) / 100), L * (-0.15 + (i * 7 % 30) / 100), L * 0.025, 0, 7); c.fill(); }
+  // the huge eye
+  c.fillStyle = '#f4efe2'; c.beginPath(); c.arc(L * 0.25, -L * 0.04, L * 0.1, 0, 7); c.fill();
+  c.fillStyle = '#121212'; c.beginPath(); c.arc(L * 0.27, -L * 0.04, L * 0.065, 0, 7); c.fill();
+  c.fillStyle = 'rgba(255,255,255,.8)'; c.beginPath(); c.arc(L * 0.29, -L * 0.07, L * 0.02, 0, 7); c.fill();
+}
+
 function drawFish(c, x, y, sp, dir, t, opts = {}) {
   const v = sp.look, L = opts.size || sp.size, H = L * v.h;
   c.save();
@@ -321,6 +375,7 @@ function drawFish(c, x, y, sp, dir, t, opts = {}) {
   c.scale(dir, 1);
   if (opts.angle) c.rotate(opts.angle);
   if (v.eel) { drawEel(c, sp, v, L, t, opts.flash); c.restore(); return; }
+  if (v.squid) { drawSquid(c, v, L, t, opts.flash); c.restore(); return; }
   const sw = Math.sin(t * (v.shark ? 5 : 9)) * 0.14;
   const fin = v.fin;
 
@@ -473,7 +528,7 @@ function renderDock() {
 
   $('dockGreeting').textContent = starterDone
     ? `You're back at Saltwater Dock. Sell your fillets and upgrade your gear!`
-    : `Welcome to Saltwater Dock! You have 100 coins. Buy a Tiny Raft and a Rusty Rod to head out.`;
+    : `Welcome to Saltwater Dock! You have 100 coins. Buy a Tiny Raft, a Rusty Rod, and a pack of bait at the market to head out.`;
 
   const shop = $('shop');
   shop.innerHTML = '';
@@ -499,18 +554,20 @@ function renderDock() {
     ml.innerHTML = `<p class="muted">Your bucket is empty. Go catch some fish!</p>`;
   } else {
     let html = fillets.map(f =>
-      `<div class="market-row"><span>${speciesById(f.id).name} fillets${f.quality < 1 ? ` <i class="bled">(bled, ${Math.round(f.quality * 100)}%)</i>` : ''}</span><b>🪙 ${fmt(f.value)}</b></div>`).join('');
+      `<div class="market-row"><span>${speciesById(f.id).name} fillets${f.quality < 1 ? ` <i class="bled">(${Math.round(f.quality * 100)}% value)</i>` : ''}</span><b>🪙 ${fmt(f.value)}</b></div>`).join('');
     const total = fillets.reduce((a, f) => a + f.value, 0);
     if (fillets.length) html += `<div class="market-total">Total: 🪙 ${fmt(total)}</div>`;
     if (raw.length) html += `<p class="muted">🐟 ${raw.length} raw fish still in your bucket. The market only buys fillets, so fillet them with your knife on the boat!</p>`;
     ml.innerHTML = html;
   }
   $('sellBtn').disabled = !fillets.length;
+  renderSupplies();
 
   $('sailBtn').disabled = !starterDone;
   $('sailNote').textContent = starterDone
     ? `${BOATS[tier()].name} · reach ${Math.round(Math.min(SEA_DEPTH, G().len - 60) / PX_PER_M)} m · ${G().power} damage · bucket holds ${G().cap}`
     : 'You need a boat and a rod before you can go fishing.';
+  if (starterDone && S.bait <= 0) $('sailNote').innerHTML = '⚠️ <b>You have no bait!</b> Buy a pack at the market so you can cast.';
 
   renderGuide();
 }
@@ -583,6 +640,27 @@ function boatCard() {
   return el;
 }
 
+function renderSupplies() {
+  const el = $('supplies');
+  const row = (icon, name, have, price, note, id) => `
+    <div class="supply">
+      <span class="sicon">${icon}</span>
+      <div class="sinfo"><b>${name}</b> · you have <b>${have}</b><br><small>${note}</small></div>
+      <button class="btn ${S.coins >= price ? 'green' : 'blue'}" id="${id}" ${S.coins >= price ? '' : 'disabled'}>10 for 🪙 ${fmt(price)}</button>
+    </div>`;
+  el.innerHTML = `<h3>🧺 Bait &amp; Ammo</h3>` +
+    row('🪱', 'Bait', S.bait, baitPrice(), 'Each cast uses 1 bait.', 'buyBait') +
+    row('⚫', 'Cannonballs', S.balls, BALL_PRICE, S.cannon ? 'Each cannon shot uses 1.' : 'You need a cannon to use these.', 'buyBalls');
+  $('buyBait').onclick = () => buyPack('bait', baitPrice(), '🪱 +10 bait');
+  $('buyBalls').onclick = () => buyPack('balls', BALL_PRICE, '⚫ +10 cannonballs');
+}
+function buyPack(key, price, msg) {
+  if (S.coins < price) return;
+  S.coins -= price; S[key] += PACK; save();
+  toast(msg);
+  renderDock();
+}
+
 // Multi-Hook and Cannon: bought once, kept forever (not reset by a new boat)
 function specialCard(icon, kind, list, key, stat) {
   const lv = S[key], cur = list[lv], next = list[lv + 1];
@@ -630,17 +708,18 @@ function renderGuide() {
     c.width = 180; c.height = 84;
     const cx = c.getContext('2d');
     const v = sp.look;
-    const wide = v.bill === 'sword' ? 3.3 : v.bill ? 3.0 : v.eel ? 2.15 : 2.65;
+    const wide = v.squid ? 3.0 : v.bill === 'sword' ? 3.3 : v.bill ? 3.0 : v.eel ? 2.15 : 2.65;
     const tall = v.eel ? 0.5 : v.h * (v.dorsal === 'sail' ? 3.6 : v.dorsal === 'sharktall' ? 3.6 : v.angler ? 3.4 : 2.6);
     const scale = Math.min(2.4, 160 / (sp.size * wide), 70 / (sp.size * tall));
-    cx.save(); cx.translate(v.bill ? 72 : 96, v.dorsal === 'sail' || v.dorsal === 'sharktall' || v.angler ? 50 : 44); cx.scale(scale, scale);
+    cx.save(); cx.translate(v.bill ? 72 : v.squid ? 70 : 96, v.dorsal === 'sail' || v.dorsal === 'sharktall' || v.angler ? 50 : 44); cx.scale(scale, scale);
     if (!known) cx.filter = 'brightness(0)';
     drawFish(cx, 0, 0, sp, 1, 0);
     cx.restore();
     d.appendChild(c);
     d.insertAdjacentHTML('beforeend',
       `<b>${known ? sp.name : '???'}</b>${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m · ${sp.hp} HP` +
-      (sp.wreck ? `<br><i>Only near shipwrecks</i>` :
+      (sp.monster ? `<br><i>One lives at the very bottom. It comes back after you catch it!</i>` :
+       sp.wreck ? `<br><i>Only near shipwrecks</i>` :
        sp.tier > tier() ? `<br><i>Needs ${BOATS[sp.tier].name}</i>` : '') +
       (known ? `<span class="gfact">${sp.fact}</span>` : ''));
     el.appendChild(d);
@@ -678,6 +757,8 @@ let pointerScreen = null;
 let camY = 0;
 let msgCooldown = 0;
 let wreckTimer = 0;
+let monsterTimer = 0;
+let inks = [];
 
 function boatW() { return BOATS[tier()].w; }
 function deckY() { return SURF - 8 + Math.sin(T * 1.6) * 2; }
@@ -694,6 +775,7 @@ function enterSea() {
   fish = []; floats = []; bubbles = []; wrecks = [];
   camY = 0; pointerScreen = null;
   rival = null; rivalTimer = rand(15, 30);
+  inks = []; monsterTimer = 0; spawnMonster(false);
   clouds = Array.from({ length: 5 }, () => ({ x: rand(0, W), y: rand(15, 70), s: rand(0.6, 1.3), v: rand(6, 16) }));
   player.x = BOAT_X; player.targetX = null;
   Object.assign(lure, { active:false, reeling:false, hooks:[] });
@@ -752,7 +834,7 @@ function pickWeighted(list) {
   return list[0];
 }
 function spawnFish(anywhere) {
-  const pool = SPECIES.filter(s => !s.wreck && s.tier <= tier());
+  const pool = SPECIES.filter(s => !s.wreck && !s.monster && s.tier <= tier());
   const schoolers = pool.filter(s => s.school);
   const isSchool = schoolers.length && Math.random() < SCHOOL_CHANCE;
   let sp, depth;
@@ -790,11 +872,20 @@ function spawnFish(anywhere) {
 function unitCount() { return new Set(fish.filter(f => !f.home && !f.hooked).map(f => f.unit)).size; }
 
 function spawnWreckFish(w) {
-  const deep = SPECIES.filter(s => !s.wreck && s.tier <= tier()).slice(-3);
+  const deep = SPECIES.filter(s => !s.wreck && !s.monster && s.tier <= tier()).slice(-3);
   const sp = Math.random() < 0.3 ? speciesById('goliath') : deep[Math.floor(Math.random() * deep.length)];
   const f = makeFish(sp, w.x + rand(-150, 150), WORLD_H - rand(40, 170), Math.random() < 0.5 ? 1 : -1);
   f.home = w; f.range = rand(90, 180); f.speed *= 0.6;
   fish.push(f);
+}
+
+// One Giant Squid lives at the very bottom. Catch it and another shows up a while later.
+function spawnMonster(announce) {
+  const sp = speciesById('squid');
+  const f = makeFish(sp, rand(150, W - 150), SURF + rand(sp.min, sp.max), Math.random() < 0.5 ? 1 : -1);
+  f.home = { x: W / 2 }; f.range = 360; f.amp = 6;
+  fish.push(f);
+  if (announce && lureReach() >= SEA_DEPTH - 150) toast('🦑 Something huge is moving at the very bottom again…', 3500);
 }
 
 function addFloat(x, y, text, color = '#fff') { floats.push({ x, y, text, color, life: 1.2 }); }
@@ -853,10 +944,13 @@ function say(msg) { if (msgCooldown <= 0) { toast(msg); msgCooldown = 2; } }
 
 function cast(p) {
   if (bucketFull()) { say('Your bucket is full! Walk right to fillet, then sail back to sell.'); return; }
+  if (S.bait <= 0) { say('🪱 Out of bait! Sail back to the dock and buy a pack at the market.'); return; }
+  S.bait--; save();
   const tip = rodTip();
   Object.assign(lure, { active:true, reeling:false, hooks:[], x: tip.x, y: tip.y });
   pointerScreen = p;
   updateHud();
+  if (S.bait === 0) setTimeout(() => toast('🪱 That was your last bait!'), 600);
 }
 function reelIn() { if (lure.active) { lure.reeling = true; updateHud(); } }
 
@@ -864,6 +958,10 @@ function finishReel(instant) {
   const caught = lure.hooks;
   if (caught.length) {
     caught.forEach(f => { S.bucket.push({ id: f.sp.id, filleted: false, value: 0 }); S.seen[f.sp.id] = true; });
+    if (caught.some(f => f.sp.monster)) {
+      monsterTimer = 45;
+      if (!instant) setTimeout(() => toast('🦑 You caught the GIANT SQUID! Another one will rise from the deep before long…', 4000), 400);
+    }
     fish = fish.filter(x => !caught.includes(x));
     if (!instant) addFloat(rodTip().x, rodTip().y - 10,
       caught.length > 1 ? `${caught.length} fish in the bucket!` : `${caught[0].sp.name} in the bucket!`, '#ffe680');
@@ -940,6 +1038,9 @@ function update(dt) {
   }
   fish = fish.filter(f => f.hooked || f.home || (f.x > -260 && f.x < W + 260));
   while (unitCount() < targetFishCount()) spawnFish(false);
+  if (!fish.some(f => f.sp.monster)) { monsterTimer -= dt; if (monsterTimer <= 0) spawnMonster(true); }
+  inks.forEach(k => { k.life -= dt; k.r += 18 * dt; });
+  inks = inks.filter(k => k.life > 0);
   wreckTimer += dt;
   if (wreckTimer > 8) {
     wreckTimer = 0;
@@ -977,6 +1078,7 @@ function checkHits() {
       updateHud();
     } else {
       f.inv = 0.5; f.flee = 0.8; f.flash = 0.25;
+      if (f.sp.monster) for (let i = 0; i < 6; i++) inks.push({ x: f.x - f.dir * rand(20, 80), y: f.y + rand(-30, 30), r: rand(14, 26), life: rand(1.5, 2.5) });
       addFloat(f.x, f.y - 18, `-${dmg}  (${Math.round(f.hp * 10) / 10} left)`, '#ff9b8a');
       if (!f.wasHit) say(`Strong fish! Hit the ${f.sp.name} ${Math.ceil(f.hp / dmg)} more time${Math.ceil(f.hp / dmg) > 1 ? 's' : ''}!`);
       f.wasHit = true;
@@ -1068,6 +1170,9 @@ function draw() {
       ctx.fillStyle = '#ff6b5b'; ctx.fillRect(f.x - w / 2, f.y - f.sp.size * Math.max(0.6, f.sp.look.h * 2) - 14, w * (f.hp / f.maxHp), 5);
     }
   }
+
+  // squid ink
+  inks.forEach(k => { ctx.fillStyle = `rgba(5,5,12,${Math.min(0.7, k.life * 0.4)})`; ctx.beginPath(); ctx.arc(k.x, k.y, k.r, 0, 7); ctx.fill(); });
 
   const tip = rodTip();
   if (lure.active) {
@@ -1283,6 +1388,8 @@ function drawPlayer() {
 // ---------------- HUD ----------------
 function updateHud() {
   $('seaCoins').textContent = `🪙 ${fmt(S.coins)}`;
+  $('suppliesPill').textContent = `🪱 ${S.bait}` + (S.cannon ? ` · ⚫ ${S.balls}` : '');
+  $('suppliesPill').classList.toggle('full', S.bait <= 0);
   $('gearPill').textContent = `${BOATS[tier()].name} · ${gearName('rod')} · ${gearName('lure')} (${G().power} dmg) · ${gearName('line')} · ${gearName('knife')}`;
   updateHudLive(true);
 }
@@ -1321,7 +1428,7 @@ let rival = null, rivalTimer = 0;
 function spawnRival() {
   const roll = Math.random();
   const t = clamp(tier() + (roll < 0.5 ? 0 : roll < 0.8 ? 1 : -1), 0, BOATS.length - 1);
-  const pool = SPECIES.filter(s => !s.wreck && s.tier <= t);
+  const pool = SPECIES.filter(s => !s.wreck && !s.monster && s.tier <= t);
   const n = Math.round(rand(2, 3 + t));
   const fishIds = Array.from({ length: n }, () => pool[Math.min(pool.length - 1, Math.floor(pool.length * Math.sqrt(Math.random())))].id);
   const dir = Math.random() < 0.5 ? 1 : -1;
@@ -1403,6 +1510,7 @@ const battleOpen = () => !$('battle').classList.contains('hidden');
 function openBattle() {
   if (!rival) return;
   if (!S.cannon) { toast('Buy a cannon at the dock to attack other fishermen! 💣'); return; }
+  if (S.balls <= 0) { toast('⚫ You have no cannonballs! Buy a pack of 10 at the market.'); return; }
   if (lure.active) { say('Reel in your line first!'); return; }
   const st = rivalStats(rival), [diff, col] = difficulty(rival);
   const best = rival.fish.map(speciesById).reduce((a, s) => s.value > a.value ? s : a);
@@ -1410,7 +1518,8 @@ function openBattle() {
   $('battleTitle').textContent = `⚔️ ${rival.name}`;
   $('battleSub').innerHTML = `Carrying <b>${rival.fish.length} fish</b>, best catch: <b>${best.name}</b>.<br>
     Difficulty: <b style="color:${col}">${diff}</b> · their boat ${st.hp} HP vs your ${BOATS[tier()].name} ${hullHP()} HP<br>
-    <small>Win: steal their fish. Lose: they take 25% of your coins and half your fish.</small>`;
+    You have <b>${S.balls} cannonballs</b>.<br>
+    <small>Win: steal their fish. Lose (or run out of cannonballs): they take 25% of your coins and half your fish.</small>`;
   $('battleStart').classList.remove('hidden');
   $('battleFight').classList.add('hidden');
   $('battleEnd').classList.add('hidden');
@@ -1432,7 +1541,8 @@ function startFight() {
 function needlePos() { return 0.5 + 0.5 * Math.sin(battle.t * 3.1); }
 
 function fire() {
-  if (!battle || battle.phase !== 'fight' || battle.reload > 0) return;
+  if (!battle || battle.phase !== 'fight' || battle.reload > 0 || S.balls <= 0) return;
+  S.balls--;
   const c = CANNONS[S.cannon];
   const d = Math.abs(needlePos() - 0.5);
   const hit = d < c.zone / 2, crit = d < c.zone / 8;
@@ -1458,7 +1568,7 @@ function endBattle(won) {
     const nLose = Math.ceil(S.bucket.length / 2);
     const lost = [];
     for (let i = 0; i < nLose; i++) lost.push(S.bucket.splice(Math.floor(Math.random() * S.bucket.length), 1)[0]);
-    msg = `💥 ${r.name} won! You lost 🪙 ${fmt(lostCoins)}` + (lost.length ? ` and ${lost.length} fish.` : '.');
+    msg = (battle.outOfAmmo ? '⚫ You ran out of cannonballs! ' : '') + `💥 ${r.name} won! You lost 🪙 ${fmt(lostCoins)}` + (lost.length ? ` and ${lost.length} fish.` : '.');
   }
   save();
   $('battleSub').textContent = msg;
@@ -1534,6 +1644,7 @@ function battleLoop() {
     battle.balls = battle.balls.filter(b => !b.done);
     if (battle.rHp <= 0) endBattle(true);
     else if (battle.myHp <= 0) endBattle(false);
+    else if (S.balls <= 0 && !battle.balls.some(b => b.from === 'me')) { battle.outOfAmmo = true; endBattle(false); }
   }
 
   // ---- draw ----
@@ -1608,7 +1719,7 @@ function battleLoop() {
     bx.fillStyle = '#fff'; bx.fillRect(nx - 2, my - 6, 4, 28);
     bx.font = 'bold 12px sans-serif'; bx.textAlign = 'center';
     bx.fillStyle = '#fff';
-    bx.fillText(battle.reload > 0 ? 'Reloading…' : 'Aim: fire in the green!', BW / 2, my - 8);
+    bx.fillText(`${battle.reload > 0 ? 'Reloading…' : 'Aim: fire in the green!'}   ⚫ ${S.balls} left`, BW / 2, my - 8);
     $('fireBtn').disabled = battle.reload > 0;
   }
   requestAnimationFrame(battleLoop);
@@ -1630,7 +1741,12 @@ const fc = $('filletCanvas'), fx = fc.getContext('2d');
 const FW = fc.width, FH = fc.height;                 // 420 x 250
 const FISH = { x: 210, y: 92, rx: 100, ry: 46 };
 const METER = { x: 24, y: 212, w: 372, h: 16, max: 1600 };
-const BAD_CUT_PENALTY = 0.2, MIN_QUALITY = 0.4;
+// Three cut zones on the speed meter. Green pays the most, yellow less, red the least.
+const GRADES = {
+  green:  { pay: 1.0, color: '#2e9d52', emoji: '🟩' },
+  yellow: { pay: 0.7, color: '#e9b91c', emoji: '🟨' },
+  red:    { pay: 0.4, color: '#d2483f', emoji: '🟥' },
+};
 let fillet = null;
 let stroke = null;
 let liveSpeed = 0, shownSpeed = null;
@@ -1639,9 +1755,17 @@ let knifeAt = null;
 let blood = [];          // dripping drops
 let pools = [];          // stains on the board / fish
 
-function zoneFor(sp) {
-  const half = 330 + G().knife.zone / 2;          // wide, forgiving window
+function zoneFor(sp) {                          // the green zone (same place as before)
+  const half = 330 + G().knife.zone / 2;
   return [Math.max(40, sp.cut - half), sp.cut + half];
+}
+function yellowFor(sp) {                        // yellow band on both sides of green
+  const [lo, hi] = zoneFor(sp), pad = 260 + G().knife.zone * 0.3;
+  return [Math.max(0, lo - pad), hi + pad];
+}
+function gradeFor(sp, speed) {
+  const [lo, hi] = zoneFor(sp), [ylo, yhi] = yellowFor(sp);
+  return speed >= lo && speed <= hi ? 'green' : speed >= ylo && speed <= yhi ? 'yellow' : 'red';
 }
 function insideFish(p) {
   return ((p.x - FISH.x) / FISH.rx) ** 2 + ((p.y - FISH.y) / FISH.ry) ** 2 <= 1;
@@ -1673,7 +1797,7 @@ function nextFilletFish() {
     $('filletBar').style.width = '100%';
     return;
   }
-  fillet = { item, sp: speciesById(item.id), chops: 0, bad: 0, cuts: [], done: false };
+  fillet = { item, sp: speciesById(item.id), chops: 0, cuts: [], done: false };
   $('filletFact').innerHTML = `<b>🐟 Did you know?</b> ${fillet.sp.fact}`;
   $('filletFact').classList.remove('hidden');
   const k = G().knife;
@@ -1711,14 +1835,14 @@ fc.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && !str
 
 function say2(text, color) { verdict = { text, color, life: 1.5 }; }
 
-function bleed(pts) {
+function bleed(pts, amount = 14) {
   const inside = pts.filter(insideFish);
   const src = inside.length ? inside : pts;
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < amount; i++) {
     const p = src[Math.floor(Math.random() * src.length)];
     blood.push({ x: p.x + rand(-4, 4), y: p.y + rand(-3, 3), vy: rand(10, 40), r: rand(2, 4.5), life: rand(1.5, 3) });
   }
-  pools.push({ x: rand(FISH.x - 60, FISH.x + 60), y: FISH.y + FISH.ry + rand(4, 18), r: 0, max: rand(14, 26) });
+  if (amount > 6) pools.push({ x: rand(FISH.x - 60, FISH.x + 60), y: FISH.y + FISH.ry + rand(4, 18), r: 0, max: rand(14, 26) });
 }
 
 function endStroke() {
@@ -1727,30 +1851,28 @@ function endStroke() {
   if (s.inLen < 45) { say2('Drag the knife across the fish!', '#ffffff'); return; }
   const speed = s.inLen / Math.max(0.02, s.inTime);
   shownSpeed = speed;
-  const [lo, hi] = zoneFor(fillet.sp);
-  const clean = speed >= lo && speed <= hi;
-  fillet.cuts.push({ pts: s.pts, clean });
+  const grade = gradeFor(fillet.sp, speed);
+  const slow = speed < zoneFor(fillet.sp)[0];
+  fillet.cuts.push({ pts: s.pts, grade });
   fillet.chops++;
-  if (clean) say2(fillet.chops < G().knife.chops ? 'Clean cut! ✔' : 'Nice!', '#9effa8');
-  else {
-    fillet.bad++;
-    bleed(s.pts);
-    say2(speed < lo ? 'Too slow! It’s bleeding 🩸' : 'Too fast! It’s bleeding 🩸', '#ff8f80');
-  }
+  if (grade === 'green') say2('🟩 Perfect cut!', '#9effa8');
+  else if (grade === 'yellow') { bleed(s.pts, 4); say2(`🟨 Okay cut, a little ${slow ? 'slow' : 'fast'}`, '#ffe680'); }
+  else { bleed(s.pts); say2(`🟥 Way too ${slow ? 'slow' : 'fast'}! It’s bleeding 🩸`, '#ff8f80'); }
 
   const k = G().knife;
   $('filletBar').style.width = `${(fillet.chops / k.chops) * 100}%`;
   if (fillet.chops < k.chops) return;
 
-  const quality = Math.max(MIN_QUALITY, 1 - fillet.bad * BAD_CUT_PENALTY);
+  const quality = Math.round(fillet.cuts.reduce((a, c) => a + GRADES[c.grade].pay, 0) / fillet.cuts.length * 100) / 100;
   const value = Math.round(fillet.sp.value * k.mult * quality);
   fillet.item.filleted = true;
   fillet.item.value = value;
   fillet.item.quality = quality;
   save();
+  const marks = fillet.cuts.map(c => GRADES[c.grade].emoji).join('');
   $('filletInfo').textContent = quality < 1
-    ? `🩸 ${fillet.sp.name} fillets (bled, ${Math.round(quality * 100)}% value): 🪙 ${fmt(value)}`
-    : `🍣 Perfect ${fillet.sp.name} fillets: 🪙 ${fmt(value)}!`;
+    ? `${marks} ${fillet.sp.name} fillets (${Math.round(quality * 100)}% value): 🪙 ${fmt(value)}`
+    : `${marks} Perfect ${fillet.sp.name} fillets: 🪙 ${fmt(value)}!`;
   fillet.done = true; fillet.showFillet = true;
   setTimeout(() => { if (!$('fillet').classList.contains('hidden')) nextFilletFish(); }, 1100);
 }
@@ -1784,8 +1906,9 @@ function filletLoop() {
     fx.beginPath(); fx.ellipse(FISH.x, FISH.y, FISH.rx, FISH.ry, 0, 0, 7); fx.clip();
     fx.lineCap = 'round';
     fillet.cuts.forEach(c => {
-      if (c.clean) { fx.strokeStyle = '#a01f17'; fx.lineWidth = 3; }
-      else { fx.strokeStyle = 'rgba(200,20,20,.85)'; fx.lineWidth = 8; }
+      if (c.grade === 'green') { fx.strokeStyle = '#a01f17'; fx.lineWidth = 3; }
+      else if (c.grade === 'yellow') { fx.strokeStyle = 'rgba(190,25,20,.85)'; fx.lineWidth = 5; }
+      else { fx.strokeStyle = 'rgba(200,20,20,.85)'; fx.lineWidth = 9; }
       drawPath(c.pts);
     });
     fx.restore();
@@ -1827,24 +1950,26 @@ function filletLoop() {
   }
 
   if (fillet.sp) {
-    const [lo, hi] = zoneFor(fillet.sp);
+    const [lo, hi] = zoneFor(fillet.sp), [ylo, yhi] = yellowFor(fillet.sp);
     const X = v => METER.x + clamp(v / METER.max, 0, 1) * METER.w;
-    fx.fillStyle = 'rgba(60,35,10,.35)';
+    fx.fillStyle = GRADES.red.color;
     fx.fillRect(METER.x, METER.y, METER.w, METER.h);
-    fx.fillStyle = '#2e9d52';
+    fx.fillStyle = GRADES.yellow.color;
+    fx.fillRect(X(ylo), METER.y, X(yhi) - X(ylo), METER.h);
+    fx.fillStyle = GRADES.green.color;
     fx.fillRect(X(lo), METER.y, X(hi) - X(lo), METER.h);
     fx.fillStyle = '#3d2610'; fx.font = 'bold 11px sans-serif';
     fx.textAlign = 'left'; fx.fillText('slow', METER.x, METER.y - 4);
     fx.textAlign = 'right'; fx.fillText('fast', METER.x + METER.w, METER.y - 4);
     fx.textAlign = 'center';
-    const bad = fillet.bad || 0;
-    fx.fillText(bad ? `knife speed · ${bad} messy cut${bad > 1 ? 's' : ''} (−${Math.round(Math.min(1 - MIN_QUALITY, bad * BAD_CUT_PENALTY) * 100)}% value)` : 'knife speed', METER.x + METER.w / 2, METER.y + METER.h + 14);
+    const marks = (fillet.cuts || []).map(c => GRADES[c.grade].emoji).join(' ');
+    fx.fillText(marks ? `knife speed · cuts so far: ${marks}` : 'knife speed: 🟩 most money · 🟨 less · 🟥 least', METER.x + METER.w / 2, METER.y + METER.h + 14);
     const v = stroke ? liveSpeed : shownSpeed;
     if (v != null) {
-      const nx = X(v), good = v >= lo && v <= hi;
-      fx.fillStyle = good ? '#ffffff' : '#d2483f';
-      fx.beginPath(); fx.moveTo(nx, METER.y - 2); fx.lineTo(nx - 7, METER.y - 12); fx.lineTo(nx + 7, METER.y - 12); fx.fill();
-      fx.fillRect(nx - 2, METER.y, 4, METER.h);
+      const nx = X(v);
+      fx.fillStyle = '#ffffff'; fx.strokeStyle = '#1b1b1b'; fx.lineWidth = 1.5;
+      fx.beginPath(); fx.moveTo(nx, METER.y - 2); fx.lineTo(nx - 7, METER.y - 12); fx.lineTo(nx + 7, METER.y - 12); fx.closePath(); fx.fill(); fx.stroke();
+      fx.fillRect(nx - 2, METER.y, 4, METER.h); fx.strokeRect(nx - 2, METER.y, 4, METER.h);
     }
   }
 

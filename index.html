@@ -26,6 +26,7 @@
         <h2>🐟 Fish Market</h2>
         <div id="marketList"></div>
         <button id="sellBtn" class="btn green">Sell Fillets</button>
+        <div id="supplies" class="supplies"></div>
       </div>
 
       <div class="card">
@@ -55,6 +56,7 @@
   <div class="hud">
     <div class="coins" id="seaCoins">🪙 0</div>
     <div class="pill" id="bucketPill">🪣 0/4</div>
+    <div class="pill" id="suppliesPill">🪱 0</div>
     <div class="pill gear" id="gearPill"></div>
     <div class="spacer"></div>
     <button id="reelBtn" class="btn yellow hidden">Reel in 🎣</button>
@@ -76,7 +78,7 @@
 <div id="fillet" class="overlay hidden">
   <div class="panel">
     <h2>🔪 Fillet Station</h2>
-    <p class="muted" id="filletSub">Drag the knife across the fish. Cuts in the <b style="color:#2e9d52">green zone</b> are clean. Too fast or too slow and the fish bleeds, so it's worth less!</p>
+    <p class="muted" id="filletSub">Drag the knife across the fish. <b style="color:#2e9d52">Green</b> cuts get the most money, <b style="color:#b8860b">yellow</b> a bit less, and <b style="color:#d2483f">red</b> the least (and the fish bleeds)!</p>
     <canvas id="filletCanvas" width="420" height="250"></canvas>
     <div id="filletInfo" class="fillet-info"></div>
     <p id="filletFact" class="fillet-fact hidden"></p>
