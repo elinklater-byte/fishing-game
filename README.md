@@ -11,7 +11,16 @@ A browser fishing game. Start on the dock with 100 coins, buy a Tiny Raft, a Rus
 - Some trips have a rare **shipwreck** on the sea floor, home to the Goliath Grouper.
 - Every place has a **final fish** at the very bottom: the Giant Squid (Ocean), the Greenland Shark (Arctic) and the Alligator Gar (Swamp). Catch one to put it in your **Trophy Room**. A new one comes back a while later.
 - Walk to the **right side** of the boat to fillet: drag the knife across each fish. The speed meter has three zones: **green** cuts pay 100%, **yellow** 70%, and **red** 40% (and the fish bleeds). The fillet is worth the average of your cuts.
-- **Bait** and **cannonballs** are sold at the market in packs of 10. Every cast uses 1 bait; every cannon shot uses 1 cannonball.
+- **Bait** comes in 4 kinds, sold in packs of 10. Better bait costs more but gets better fish. A fish won't bite bait that isn't good enough for it:
+  - 🪱 Worms (10): Tiny Raft & Rowboat fish
+  - 🦐 Shrimp (120): Skiff & Fishing Boat fish
+  - 🦑 Squid Strips (700): Trawler & Research Vessel fish
+  - ✨ Glow Bait (2,500): Deep-Sea Explorer fish and the final fish
+  Pick which bait to use at the market, or tap the bait pill (or press **B**) at sea to switch. The fish guide shows which bait each fish needs.
+- **Cannonballs** are sold in packs of 10. Every cannon shot uses 1.
+- **Market prices** go up and down with demand every 20 seconds, and now and then there's big news about one fish. Each fillet shows its market price. Type your own price and hit Sell: ask too much and the buyer says no (each fillet has a secret top price, up to 25% over market). Or sell everything at market price.
+- **Fridge**: tap **Keep 🧊** to store a fillet and sell it later when its price goes up. You need a fridge (Mini Fridge, Big Fridge, Walk-in Freezer) and ice. Ice melts while you play; a bag lasts 3 minutes. With no ice, the fish in your fridge lose value and go bad in about 2 minutes.
+- **Quests**: the quest board at the dock always has an Easy ★, Medium ★★ and Hard ★★★ quest (catch fish in a place, catch one kind of fish, catch fish really deep, or beat a final fish). Harder quests pay more. Claim the reward at the dock, or swap a quest for a new one.
 - Sail back to the dock, sell your fillets, and upgrade your rod, lure, slack, knife and bucket (6 levels each per boat).
 - **Multi-Hook** (expensive): catch up to 5 fish on one cast.
 - **Cannons**: rival fishermen sail past now and then. Click their boat to start a cannon battle (fire when the needle is in the green). Win and you steal their fish; lose and they take 25% of your coins and half your fish. The better their catch, the tougher they are.

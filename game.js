@@ -77,9 +77,37 @@ const hullHP = () => 12 + tier() * 6;
 
 // Supplies come in packs of 10 from the market. Each cast uses 1 bait; each cannon shot uses 1 cannonball.
 const PACK = 10;
-const BAIT_PRICES = [10, 20, 40, 80, 150, 300, 600];   // better boats fish deeper, so bait costs more
-const baitPrice = () => BAIT_PRICES[tier()];
 const BALL_PRICE = 60;
+// Better bait gets better fish. A fish only bites bait that's good enough for it
+// (better bait still catches all the smaller fish too).
+const BAITS = [
+  { id:'worm',   icon:'🪱', name:'Worms',        price:10,   who:'Tiny Raft & Rowboat fish' },
+  { id:'shrimp', icon:'🦐', name:'Shrimp',       price:120,  who:'Skiff & Fishing Boat fish' },
+  { id:'squid',  icon:'🦑', name:'Squid Strips', price:700,  who:'Trawler & Research Vessel fish' },
+  { id:'glow',   icon:'✨', name:'Glow Bait',    price:2500, who:'Deep-Sea Explorer fish & the final fish' },
+];
+const baitNeed = sp => sp.boss ? 3 : Math.min(3, Math.floor(sp.tier / 2));
+const baitLv = () => Math.max(0, BAITS.findIndex(b => b.id === S.baitSel));
+const curBait = () => BAITS[baitLv()];
+const baitLeft = () => S.baits[curBait().id] || 0;
+
+// Market: every kind of fish has a price that moves with demand.
+const MARKET_TICK = 20;          // seconds between price changes
+const marketMult = id => (S.mkt[id] ? S.mkt[id].m : 1);
+const marketTrend = id => (S.mkt[id] ? S.mkt[id].t : 0);
+const freshOf = f => (f.fresh == null ? 1 : f.fresh);
+const filletPrice = f => Math.max(1, Math.round(f.value * marketMult(f.id) * freshOf(f)));
+
+// Fridge: keep fillets to sell later. Ice melts while you play; without ice the fish go bad.
+const FRIDGES = [
+  { name:'No Fridge',       cost:0 },
+  { name:'Mini Fridge',     cost:200,   cap:8,  iceMax:600,  icePrice:20 },
+  { name:'Big Fridge',      cost:2500,  cap:20, iceMax:1200, icePrice:80 },
+  { name:'Walk-in Freezer', cost:20000, cap:50, iceMax:2400, icePrice:300 },
+];
+const ICE_BAG = 180;             // one bag of ice lasts 3 minutes of play
+const ROT_TIME = 120;            // seconds for a fillet to go fully bad with no ice
+const fridgeInfo = () => FRIDGES[S.fridgeLv || 0];
 const statText = {
   rod:    g => `Lure speed ${STAT.rod(g)}`,
   lure:   g => `Hits fish for ${STAT.lure(g)} damage`,
@@ -93,14 +121,22 @@ const statText = {
 // ======================================================================
 const SAVE_KEY = 'hook-line-sinker-v2';
 function freshState() {
-  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, hooks:0, cannon:0, bait:0, balls:0, bucket:[], seen:{}, earned:0,
+  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, hooks:0, cannon:0, baits:{ worm:0, shrimp:0, squid:0, glow:0 }, baitSel:'worm', balls:0, bucket:[],
+    mkt:{}, mktT:0, fridgeLv:0, fridge:[], ice:0, quests:null, uid:0, seen:{}, earned:0,
     env:'ocean', caught:0, caughtEnv:{}, trophies:{}, factIdx:{}, username:'', playerKey:'',
     gender:'', device:'' };
 }
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (s && s.lv) return Object.assign(freshState(), s);
+    if (s && s.lv) {
+      const st = Object.assign(freshState(), s);
+      // older saves had just one kind of bait (worms)
+      st.baits = Object.assign({ worm:0, shrimp:0, squid:0, glow:0 }, s.baits || {});
+      if (typeof s.bait === 'number') { st.baits.worm += s.bait; delete st.bait; }
+      [...st.bucket, ...st.fridge].forEach(f => { if (!f.uid) f.uid = ++st.uid; });
+      return st;
+    }
   } catch (e) {}
   return freshState();
 }
@@ -686,21 +722,9 @@ function renderDock() {
   }
   $('shopTitle').textContent = starterDone ? `🛒 Upgrade Shop — ${BOATS[tier()].name} gear` : '🛒 Starter Shop: buy these first!';
 
-  // ---- market ----
-  const fillets = S.bucket.filter(f => f.filleted);
-  const raw = S.bucket.filter(f => !f.filleted);
-  const ml = $('marketList');
-  if (!S.bucket.length) {
-    ml.innerHTML = `<p class="muted">Your bucket is empty. Go catch some fish!</p>`;
-  } else {
-    let html = fillets.map(f =>
-      `<div class="market-row"><span>${speciesById(f.id).name} fillets${f.quality < 1 ? ` <i class="bled">(${Math.round(f.quality * 100)}% value)</i>` : ''}</span><b>🪙 ${fmt(f.value)}</b></div>`).join('');
-    const total = fillets.reduce((a, f) => a + f.value, 0);
-    if (fillets.length) html += `<div class="market-total">Total: 🪙 ${fmt(total)}</div>`;
-    if (raw.length) html += `<p class="muted">🐟 ${raw.length} raw fish still in your bucket. The market only buys fillets, so fillet them with your knife on the boat!</p>`;
-    ml.innerHTML = html;
-  }
-  $('sellBtn').disabled = !fillets.length;
+  renderMarket();
+  renderFridge();
+  renderQuests();
   renderSupplies();
   renderEnvPicker();
   renderTrophies();
@@ -710,7 +734,7 @@ function renderDock() {
   $('sailNote').textContent = starterDone
     ? `${BOATS[tier()].name} · reach ${Math.round(Math.min(SEA_DEPTH, G().len - 60) / PX_PER_M)} m · ${G().power} damage · bucket holds ${G().cap}`
     : 'You need a boat and a rod before you can go fishing.';
-  if (starterDone && S.bait <= 0) $('sailNote').innerHTML = '⚠️ <b>You have no bait!</b> Buy a pack at the market so you can cast.';
+  if (starterDone && !BAITS.some(b => S.baits[b.id] > 0)) $('sailNote').innerHTML = '⚠️ <b>You have no bait!</b> Buy a pack at the market so you can cast.';
 
   renderGuide();
 }
@@ -785,23 +809,399 @@ function boatCard() {
 
 function renderSupplies() {
   const el = $('supplies');
-  const row = (icon, name, have, price, note, id) => `
+  const buyBtn = (price, id) => `<button class="btn ${S.coins >= price ? 'green' : 'blue'}" id="${id}" ${S.coins >= price ? '' : 'disabled'}>10 for 🪙 ${fmt(price)}</button>`;
+  el.innerHTML = `<h3>🧺 Bait &amp; Ammo</h3><p class="muted small">Better bait gets better fish. Each cast uses 1 of the bait you're using.</p>` +
+    BAITS.map((b, i) => `
+    <div class="supply ${S.baitSel === b.id ? 'using' : ''}">
+      <span class="sicon">${b.icon}</span>
+      <div class="sinfo"><b>${b.name}</b> · you have <b>${S.baits[b.id]}</b><br><small>Catches ${b.who}${i ? ' (and all smaller fish)' : ''}</small></div>
+      ${S.baitSel === b.id ? `<span class="using-tag">Using</span>` : `<button class="btn tiny ghost" data-use="${b.id}">Use</button>`}
+      ${buyBtn(b.price, 'buy-' + b.id)}
+    </div>`).join('') + `
     <div class="supply">
-      <span class="sicon">${icon}</span>
-      <div class="sinfo"><b>${name}</b> · you have <b>${have}</b><br><small>${note}</small></div>
-      <button class="btn ${S.coins >= price ? 'green' : 'blue'}" id="${id}" ${S.coins >= price ? '' : 'disabled'}>10 for 🪙 ${fmt(price)}</button>
+      <span class="sicon">⚫</span>
+      <div class="sinfo"><b>Cannonballs</b> · you have <b>${S.balls}</b><br><small>${S.cannon ? 'Each cannon shot uses 1.' : 'You need a cannon to use these.'}</small></div>
+      ${buyBtn(BALL_PRICE, 'buyBalls')}
     </div>`;
-  el.innerHTML = `<h3>🧺 Bait &amp; Ammo</h3>` +
-    row('🪱', 'Bait', S.bait, baitPrice(), 'Each cast uses 1 bait.', 'buyBait') +
-    row('⚫', 'Cannonballs', S.balls, BALL_PRICE, S.cannon ? 'Each cannon shot uses 1.' : 'You need a cannon to use these.', 'buyBalls');
-  $('buyBait').onclick = () => buyPack('bait', baitPrice(), '🪱 +10 bait');
-  $('buyBalls').onclick = () => buyPack('balls', BALL_PRICE, '⚫ +10 cannonballs');
+  BAITS.forEach(b => {
+    $('buy-' + b.id).onclick = () => {
+      if (S.coins < b.price) return;
+      S.coins -= b.price; S.baits[b.id] += PACK;
+      if (!S.baits[S.baitSel]) S.baitSel = b.id;
+      save(); toast(`${b.icon} +10 ${b.name}`); renderDock();
+    };
+  });
+  el.querySelectorAll('[data-use]').forEach(x => x.onclick = () => { S.baitSel = x.dataset.use; save(); toast(`${curBait().icon} Now using ${curBait().name}`); renderDock(); });
+  $('buyBalls').onclick = () => {
+    if (S.coins < BALL_PRICE) return;
+    S.coins -= BALL_PRICE; S.balls += PACK; save(); toast('⚫ +10 cannonballs'); renderDock();
+  };
 }
-function buyPack(key, price, msg) {
-  if (S.coins < price) return;
-  S.coins -= price; S[key] += PACK; save();
-  toast(msg);
+function switchBait() {
+  const owned = BAITS.filter(b => S.baits[b.id] > 0);
+  if (!owned.length) { toast('🪱 You have no bait. Buy some at the market!'); return; }
+  const i = owned.findIndex(b => b.id === S.baitSel);
+  S.baitSel = owned[(i + 1) % owned.length].id;
+  save(); updateHud();
+  toast(`${curBait().icon} Now using ${curBait().name} (${baitLeft()} left)`);
+}
+
+// ======================================================================
+//  FISH MARKET: prices go up and down with demand
+// ======================================================================
+const asks = {};                       // prices the player typed, by fillet uid
+const said = {};                       // what the buyer said back, by fillet uid
+const BUYERS = ['Chef Rosa', 'Mr. Pike', 'Granny Gill', 'The Crab Shack', 'Sushi Sam', 'Captain Cook', 'Fishmonger Flo'];
+function marketStep() {
+  SPECIES.forEach(sp => {
+    const m = S.mkt[sp.id] || (S.mkt[sp.id] = { m: Math.round(rand(0.8, 1.2) * 100) / 100, t: 0 });
+    m.t = clamp(m.t * 0.85 + rand(-0.035, 0.035), -0.09, 0.09);   // demand drifts up or down
+    m.m = clamp(m.m * (1 + m.t) + (1 - m.m) * 0.03, 0.4, 2.5);    // and slowly pulls back to normal
+    m.m = Math.round(m.m * 100) / 100;
+  });
+  // now and then, big news changes demand for one fish
+  if (Math.random() < 0.12) {
+    const list = SPECIES.filter(sp => S.seen[sp.id] && !sp.boss);
+    if (list.length) {
+      const sp = list[Math.floor(Math.random() * list.length)];
+      const up = Math.random() < 0.55;
+      S.mkt[sp.id].t = up ? 0.16 : -0.14;
+      return up ? `📰 Restaurants can't get enough ${sp.name}! Its price is going up.`
+                : `📰 Too much ${sp.name} at the market. Its price is dropping.`;
+    }
+  }
+  return null;
+}
+function marketCatchUp() {
+  const now = Date.now();
+  if (!S.mktT) { S.mktT = now; marketStep(); save(); return; }
+  let steps = Math.floor((now - S.mktT) / (MARKET_TICK * 1000));
+  if (steps <= 0) return;
+  S.mktT += steps * MARKET_TICK * 1000;
+  let news = null;
+  for (let i = 0; i < Math.min(steps, 30); i++) news = marketStep() || news;
+  save();
+  if (!$('dock').classList.contains('hidden')) {
+    if (news) toast(news, 4200);
+    refreshPrices();
+  }
+}
+function trendTag(id) {
+  const t = marketTrend(id), m = marketMult(id);
+  const arrow = t > 0.012 ? '<b class="up">▲</b>' : t < -0.012 ? '<b class="down">▼</b>' : '<b class="flat">▬</b>';
+  const word = m >= 1.4 ? 'Very high demand' : m >= 1.1 ? 'High demand' : m > 0.9 ? 'Normal demand' : m > 0.65 ? 'Low demand' : 'Very low demand';
+  return `${arrow} <span class="pct ${m >= 1 ? 'up' : 'down'}">${m >= 1 ? '+' : ''}${Math.round((m - 1) * 100)}%</span> <small>${word}</small>`;
+}
+function renderPriceBoard() {
+  const el = $('priceBoard');
+  const list = SPECIES.filter(sp => S.seen[sp.id]).sort((a, b) => a.value - b.value);
+  if (!list.length) { el.innerHTML = `<p class="muted">Catch some fish to see their market prices here.</p>`; return; }
+  el.innerHTML = list.map(sp => `
+    <div class="price-row"><span>${ENVS[sp.env].icon} ${sp.name}</span>
+      <span class="trend">${trendTag(sp.id)}</span>
+      <b>🪙 ${fmt(Math.round(sp.value * marketMult(sp.id)))}</b></div>`).join('');
+}
+function filletRow(f, where) {
+  const sp = speciesById(f.id), mp = filletPrice(f);
+  const fresh = freshOf(f);
+  const notes = [];
+  if (f.quality < 1) notes.push(`${Math.round(f.quality * 100)}% cut`);
+  if (fresh < 1) notes.push(`<span class="spoil">${Math.round(fresh * 100)}% fresh</span>`);
+  const ask = asks[f.uid] != null ? asks[f.uid] : mp;
+  return `
+    <div class="fillet-row" data-uid="${f.uid}">
+      <div class="fr-top">
+        <span class="fr-name">${ENVS[sp.env].icon} ${sp.name} fillet ${notes.length ? `<i class="bled">(${notes.join(', ')})</i>` : ''}</span>
+        <span class="fr-mkt">Market: <b id="mp-${f.uid}">🪙 ${fmt(mp)}</b> <span id="tr-${f.uid}">${trendTag(f.id)}</span></span>
+      </div>
+      <div class="fr-act">
+        <label>Your price 🪙 <input type="number" min="1" step="1" inputmode="numeric" id="ask-${f.uid}" value="${ask}"></label>
+        <button class="btn green tiny" data-sell="${f.uid}" data-where="${where}">Sell</button>
+        ${where === 'bucket' ? `<button class="btn blue tiny" data-keep="${f.uid}">Keep 🧊</button>` : ''}
+      </div>
+      <div class="fr-said" id="said-${f.uid}">${said[f.uid] || ''}</div>
+    </div>`;
+}
+function wireFilletRows(root) {
+  root.querySelectorAll('input[id^="ask-"]').forEach(inp => {
+    inp.oninput = () => { const v = parseInt(inp.value, 10); asks[inp.id.slice(4)] = isNaN(v) ? '' : v; };
+  });
+  root.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => trySell(+b.dataset.sell, b.dataset.where));
+  root.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => keepFillet(+b.dataset.keep));
+}
+function renderMarket() {
+  renderPriceBoard();
+  const fillets = S.bucket.filter(f => f.filleted);
+  const raw = S.bucket.filter(f => !f.filleted);
+  const ml = $('marketList');
+  if (!S.bucket.length) {
+    ml.innerHTML = `<p class="muted">Your bucket is empty. Go catch some fish!</p>`;
+  } else {
+    let html = fillets.length ? `<p class="muted small">Type your own price, or sell at the market price. Ask too much and the buyer says no!</p>` : '';
+    html += fillets.map(f => filletRow(f, 'bucket')).join('');
+    if (raw.length) html += `<p class="muted">🐟 ${raw.length} raw fish still in your bucket. The market only buys fillets, so fillet them with your knife on the boat!</p>`;
+    ml.innerHTML = html;
+    wireFilletRows(ml);
+  }
+  const total = fillets.reduce((a, f) => a + filletPrice(f), 0);
+  $('sellBtn').disabled = !fillets.length;
+  $('sellBtn').textContent = fillets.length ? `Sell all ${fillets.length} at market price · 🪙 ${fmt(total)}` : 'Sell fillets';
+}
+// update prices on screen without wiping what the player is typing
+function refreshPrices() {
+  renderPriceBoard();
+  [...S.bucket, ...S.fridge].filter(f => f.filleted).forEach(f => {
+    const mp = $('mp-' + f.uid);
+    if (!mp) return;
+    mp.textContent = `🪙 ${fmt(filletPrice(f))}`;
+    $('tr-' + f.uid).innerHTML = trendTag(f.id);
+    const inp = $('ask-' + f.uid);
+    if (inp && asks[f.uid] == null && document.activeElement !== inp) inp.value = filletPrice(f);
+  });
+  const fillets = S.bucket.filter(f => f.filleted);
+  if (fillets.length) $('sellBtn').textContent = `Sell all ${fillets.length} at market price · 🪙 ${fmt(fillets.reduce((a, f) => a + filletPrice(f), 0))}`;
+}
+function takeFillet(uid, where) {
+  const list = where === 'fridge' ? S.fridge : S.bucket;
+  const i = list.findIndex(f => f.uid === uid);
+  return i < 0 ? null : list.splice(i, 1)[0];
+}
+function trySell(uid, where) {
+  const list = where === 'fridge' ? S.fridge : S.bucket;
+  const f = list.find(x => x.uid === uid);
+  if (!f) return;
+  const mp = filletPrice(f);
+  const inp = $('ask-' + uid);
+  const ask = Math.round(Number(inp && inp.value));
+  if (!ask || ask < 1) { said[uid] = '✏️ Type a price first!'; $('said-' + uid).textContent = said[uid]; return; }
+  // each fillet has a secret top price the buyer will pay: 0–25% over market
+  if (f.tol == null) { f.tol = Math.round(rand(0, 0.25) * 100) / 100; save(); }
+  const most = Math.floor(mp * (1 + f.tol));
+  const buyer = BUYERS[uid % BUYERS.length];
+  if (ask > most) {
+    const far = ask > mp * 1.3;
+    said[uid] = far ? `🙅 ${buyer}: "No way! That's way too much."` : `🤔 ${buyer}: "Hmm, too pricey for me. Maybe a little less?"`;
+    $('said-' + uid).textContent = said[uid];
+    return;
+  }
+  takeFillet(uid, where);
+  delete asks[uid]; delete said[uid];
+  S.coins += ask; S.earned += ask;
+  save(); syncSoon();
+  const sp = speciesById(f.id);
+  toast(ask > mp ? `🤝 ${buyer} paid 🪙 ${fmt(ask)} for your ${sp.name} fillet. That's ${fmt(ask - mp)} more than market!`
+                 : `🤝 Sold your ${sp.name} fillet for 🪙 ${fmt(ask)}.`, 3000);
   renderDock();
+}
+function sellAll() {
+  const fillets = S.bucket.filter(f => f.filleted);
+  if (!fillets.length) return;
+  const total = fillets.reduce((a, f) => a + filletPrice(f), 0);
+  S.coins += total; S.earned += total;
+  fillets.forEach(f => { delete asks[f.uid]; delete said[f.uid]; });
+  S.bucket = S.bucket.filter(f => !f.filleted);
+  save();
+  toast(`Sold ${fillets.length} fillet${fillets.length > 1 ? 's' : ''} for 🪙 ${fmt(total)}!`);
+  syncSoon();
+  renderDock();
+}
+
+// ======================================================================
+//  FRIDGE & ICE
+// ======================================================================
+function keepFillet(uid) {
+  const fr = fridgeInfo();
+  if (!S.fridgeLv) { toast('🧊 You need a fridge to keep fish. Buy one in the Fridge box!', 3000); return; }
+  if (S.fridge.length >= fr.cap) { toast(`Your ${fr.name} is full (${fr.cap} fillets). Sell some or get a bigger fridge.`, 3000); return; }
+  const f = takeFillet(uid, 'bucket');
+  if (!f) return;
+  delete said[uid];
+  S.fridge.push(f); save();
+  toast(S.ice > 0 ? `🧊 Put your ${speciesById(f.id).name} fillet in the fridge.` : `🧊 In the fridge, but you have no ice! Buy ice or it will go bad.`, 3000);
+  renderDock();
+}
+function renderFridge() {
+  const el = $('fridgeBox');
+  const lv = S.fridgeLv || 0, fr = fridgeInfo(), next = FRIDGES[lv + 1];
+  let html = '';
+  if (!lv) {
+    html += `<p class="muted">Want to keep your fish and sell them later when the price goes up? You need a fridge and ice. Ice melts while you play, so keep buying more, or your fish go bad!</p>`;
+  } else {
+    const pct = Math.round(S.ice / fr.iceMax * 100);
+    html += `
+      <div class="fridge-head"><b>${fr.name}</b> · <span id="fridgeCount">${S.fridge.length}/${fr.cap}</span> fillets</div>
+      <div class="ice-meter"><div id="iceBar" style="width:${pct}%"></div><span id="iceText">${iceText()}</span></div>
+      <div class="row-btns"><button class="btn ${S.coins >= fr.icePrice ? 'green' : 'blue'} tiny" id="buyIce" ${S.coins >= fr.icePrice && S.ice < fr.iceMax ? '' : 'disabled'}>Buy ice (+3 min) · 🪙 ${fmt(fr.icePrice)}</button></div>`;
+    html += S.fridge.length ? S.fridge.map(f => filletRow(f, 'fridge')).join('') : `<p class="muted">Empty. Tap <b>Keep 🧊</b> on a fillet in the market to store it here.</p>`;
+  }
+  if (next) html += `<div class="fridge-buy"><span>${lv ? 'Upgrade to' : 'Buy a'} <b>${next.name}</b>: holds ${next.cap} fillets, ${next.iceMax / 60} min of ice</span>
+      <button class="btn ${S.coins >= next.cost ? 'green' : 'blue'} tiny" id="buyFridge" ${S.coins >= next.cost ? '' : 'disabled'}>🪙 ${fmt(next.cost)}</button></div>`;
+  el.innerHTML = html;
+  wireFilletRows(el);
+  if ($('buyIce')) $('buyIce').onclick = () => {
+    if (S.coins < fr.icePrice || S.ice >= fr.iceMax) return;
+    S.coins -= fr.icePrice; S.ice = Math.min(fr.iceMax, S.ice + ICE_BAG); save();
+    toast('🧊 Added a bag of ice!'); renderDock();
+  };
+  if ($('buyFridge')) $('buyFridge').onclick = () => {
+    if (S.coins < next.cost) return;
+    S.coins -= next.cost; S.fridgeLv = lv + 1;
+    if (!lv) S.ice = ICE_BAG;        // your first fridge comes with one bag of ice
+    save();
+    toast(lv ? `❄️ Upgraded to the ${next.name}!` : `❄️ You got a ${next.name}, and a free bag of ice to start!`, 3200);
+    renderDock();
+  };
+}
+function iceText() {
+  if (S.ice <= 0) return S.fridge.length ? '💧 No ice! Your fish are going bad!' : '💧 No ice';
+  const m = Math.floor(S.ice / 60), s = Math.floor(S.ice % 60);
+  return `🧊 Ice: ${m}:${String(s).padStart(2, '0')} left`;
+}
+function updateIcePill() {
+  const pill = $('icePill');
+  if (!S.fridgeLv) { pill.classList.add('hidden'); return; }
+  pill.classList.remove('hidden');
+  const m = Math.floor(S.ice / 60), s = Math.floor(S.ice % 60);
+  pill.textContent = S.ice > 0 ? `🧊 ${m}:${String(s).padStart(2, '0')}` : '💧 No ice!';
+  pill.classList.toggle('full', S.ice <= 0 && S.fridge.length > 0);
+}
+let iceWarned = false, iceSaveT = 0;
+function iceTick() {
+  if (document.hidden || !S.fridgeLv) return;
+  const atDock = !$('dock').classList.contains('hidden');
+  if (S.ice > 0) {
+    S.ice = Math.max(0, S.ice - 1);
+    if (S.ice === 60 && S.fridge.length) toast('🧊 Your ice is almost melted! Buy more at the dock.', 3200);
+    if (S.ice === 0 && S.fridge.length) toast('💧 Your ice melted! Buy more ice or the fish in your fridge will go bad.', 4000);
+    iceWarned = false;
+  } else if (S.fridge.length) {
+    const rotted = [];
+    S.fridge.forEach(f => { f.fresh = Math.max(0, freshOf(f) - 1 / ROT_TIME); if (f.fresh <= 0) rotted.push(f); });
+    if (rotted.length) {
+      S.fridge = S.fridge.filter(f => !rotted.includes(f));
+      toast(`🤢 ${rotted.length} fillet${rotted.length > 1 ? 's' : ''} went bad and had to be thrown away. Keep your fridge full of ice!`, 4000);
+      save();
+      if (atDock) renderDock();
+    } else if (!iceWarned) { iceWarned = true; }
+  }
+  if (atDock) {
+    const fr = fridgeInfo();
+    if ($('iceBar')) { $('iceBar').style.width = `${Math.round(S.ice / fr.iceMax * 100)}%`; $('iceText').textContent = iceText(); }
+    if (S.ice <= 0) S.fridge.forEach(f => {   // show freshness and price dropping
+      const mp = $('mp-' + f.uid); if (mp) mp.textContent = `🪙 ${fmt(filletPrice(f))}`;
+    });
+    if (S.ice <= 0 && S.fridge.length && iceSaveT % 6 === 0 && !(document.activeElement && document.activeElement.tagName === 'INPUT')) renderFridge();
+  } else updateIcePill();
+  if (++iceSaveT % 5 === 0) save();
+}
+setInterval(iceTick, 1000);
+setInterval(marketCatchUp, 2000);
+
+// ======================================================================
+//  QUESTS: the harder the quest, the more money you get
+// ======================================================================
+const QUEST_LEVELS = [
+  { stars: 1, label: 'Easy' },
+  { stars: 2, label: 'Medium' },
+  { stars: 3, label: 'Hard' },
+];
+const pick = list => list[Math.floor(Math.random() * list.length)];
+const round5 = n => Math.max(5, Math.round(n / 5) * 5);
+function questPool(e) {
+  const reach = Math.max(300, lureReach());
+  return SPECIES.filter(s => s.env === e && !s.boss && !s.wreck && s.tier <= tier() && s.min <= reach - 20);
+}
+function avgValue(list) {
+  const w = list.reduce((a, s) => a + s.weight, 0) || 1;
+  return list.reduce((a, s) => a + s.value * s.weight, 0) / w;
+}
+function makeQuest(level) {
+  const e = pick(ENV_KEYS), pool = questPool(e);
+  const q = { level, env: e, have: 0, done: false };
+  if (level === 0) {                                     // catch N fish in a place
+    q.kind = 'env'; q.n = 4 + Math.floor(Math.random() * 3);
+    q.reward = round5(q.n * avgValue(pool) * 0.3);
+  } else if (level === 1) {                              // catch N of one kind of fish
+    const better = pool.slice(Math.floor(pool.length / 2));
+    const sp = pick(better.length ? better : pool);
+    q.kind = 'species'; q.sp = sp.id;
+    q.n = sp.school ? 4 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2);
+    q.reward = round5(q.n * sp.value * 0.5 + 25);
+  } else {
+    const boss = bossOf(e);
+    if (tier() >= 6 && lureReach() >= boss.min && Math.random() < 0.3) {   // beat the final fish
+      q.kind = 'boss'; q.sp = boss.id; q.n = 1;
+      q.reward = round5(boss.value * 0.4);
+    } else {                                             // catch fish really deep down
+      const deepest = Math.min(Math.max(300, lureReach()), Math.max(...pool.map(s => s.max)));
+      const m = Math.max(15, Math.round(deepest * rand(0.7, 0.85) / PX_PER_M / 5) * 5);
+      const deep = pool.filter(s => s.max >= m * PX_PER_M);
+      q.kind = 'deep'; q.depth = m; q.n = 2 + Math.floor(Math.random() * 2);
+      q.reward = round5(q.n * avgValue(deep.length ? deep : pool) * 0.9 + 50);
+    }
+  }
+  return q;
+}
+function questText(q) {
+  const where = `${ENVS[q.env].icon} ${ENVS[q.env].name}`;
+  if (q.kind === 'env') return `Catch ${q.n} fish in the ${where}`;
+  if (q.kind === 'species') return `Catch ${q.n} ${speciesById(q.sp).name} in the ${where}`;
+  if (q.kind === 'boss') return `Beat the ${speciesById(q.sp).name}, the final fish of the ${where}`;
+  return `Catch ${q.n} fish ${q.depth} m deep or deeper in the ${where}`;
+}
+function questHint(q) {
+  const sp = q.sp && speciesById(q.sp);
+  if (sp) return `Lives ${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m down · needs ${BAITS[baitNeed(sp)].icon} ${BAITS[baitNeed(sp)].name}`;
+  return '';
+}
+function questProgress(caught) {
+  if (!S.quests) return;
+  caught.forEach(f => {
+    const depthM = (f.y - SURF) / PX_PER_M;
+    S.quests.forEach(q => {
+      if (q.done || f.sp.env !== q.env) return;
+      const ok = q.kind === 'env' || (q.kind === 'species' || q.kind === 'boss') && f.sp.id === q.sp || q.kind === 'deep' && depthM >= q.depth;
+      if (!ok) return;
+      q.have++;
+      if (q.have >= q.n) {
+        q.done = true;
+        setTimeout(() => toast(`📜 Quest done: ${questText(q)}! Claim 🪙 ${fmt(q.reward)} at the dock.`, 4000), 900);
+      } else addFloat(rodTip().x, rodTip().y - 34, `📜 ${q.have}/${q.n}`, '#bfe7fb');
+    });
+  });
+}
+function renderQuests() {
+  if (!S.quests) { S.quests = QUEST_LEVELS.map((_, i) => makeQuest(i)); save(); }
+  const el = $('questList');
+  el.innerHTML = S.quests.map((q, i) => {
+    const L = QUEST_LEVELS[q.level];
+    const pct = Math.min(100, Math.round(q.have / q.n * 100));
+    return `
+    <div class="quest ${q.done ? 'done' : ''} q${q.level}">
+      <div class="q-top"><span class="stars">${'★'.repeat(L.stars)}${'☆'.repeat(3 - L.stars)} ${L.label}</span><b class="q-pay">🪙 ${fmt(q.reward)}</b></div>
+      <div class="q-text">${questText(q)}</div>
+      ${questHint(q) ? `<div class="q-hint">${questHint(q)}</div>` : ''}
+      <div class="q-bar"><div style="width:${pct}%"></div><span>${Math.min(q.have, q.n)}/${q.n}</span></div>
+      <div class="q-btns">
+        ${q.done ? `<button class="btn green tiny" data-claim="${i}">Claim 🪙 ${fmt(q.reward)}</button>`
+                 : `<button class="btn ghost tiny" data-swap="${i}">🔄 Swap for a new one</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('[data-claim]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.claim, q = S.quests[i];
+    if (!q || !q.done) return;
+    S.coins += q.reward; S.earned += q.reward;
+    S.quests[i] = makeQuest(q.level);
+    save(); syncSoon();
+    toast(`📜 Quest reward: 🪙 ${fmt(q.reward)}! A new quest is on the board.`, 3200);
+    renderDock();
+  });
+  el.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.swap;
+    S.quests[i] = makeQuest(S.quests[i].level);
+    save(); renderDock();
+  });
 }
 
 // Multi-Hook and Cannon: bought once, kept forever (not reset by a new boat)
@@ -829,18 +1229,6 @@ function specialCard(icon, kind, list, key, stat) {
   return el;
 }
 
-function sellAll() {
-  const fillets = S.bucket.filter(f => f.filleted);
-  if (!fillets.length) return;
-  const total = fillets.reduce((a, f) => a + f.value, 0);
-  S.coins += total; S.earned += total;
-  S.bucket = S.bucket.filter(f => !f.filleted);
-  save();
-  toast(`Sold ${fillets.length} fillet${fillets.length > 1 ? 's' : ''} for 🪙 ${fmt(total)}!`);
-  syncSoon();
-  renderDock();
-}
-
 function renderGuide() {
   const el = $('fishGuide');
   el.innerHTML = '';
@@ -863,7 +1251,7 @@ function renderGuide() {
     cx.restore();
     d.appendChild(c);
     d.insertAdjacentHTML('beforeend',
-      `<b>${known ? sp.name : '???'}</b>${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m · ${sp.hp} HP` +
+      `<b>${known ? sp.name : '???'}</b>${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m · ${sp.hp} HP · ${BAITS[baitNeed(sp)].icon}` +
       (sp.boss ? `<br><i>👑 Final fish! One lives at the very bottom and comes back after you catch it.</i>` :
        sp.wreck ? `<br><i>Only near shipwrecks</i>` :
        sp.tier > tier() ? `<br><i>Needs ${BOATS[sp.tier].name}</i>` : '') +
@@ -1240,6 +1628,7 @@ window.addEventListener('keydown', e => {
     else if (fishingZone()) cast({ x: rodTip().x, y: SURF + 60 });
   }
   if (e.key.toLowerCase() === 'f' && filletZone()) openFillet();
+  if (e.key.toLowerCase() === 'b') switchBait();
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
@@ -1274,13 +1663,18 @@ function say(msg) { if (msgCooldown <= 0) { toast(msg); msgCooldown = 2; } }
 
 function cast(p) {
   if (bucketFull()) { say('Your bucket is full! Walk right to fillet, then sail back to sell.'); return; }
-  if (S.bait <= 0) { say('🪱 Out of bait! Sail back to the dock and buy a pack at the market.'); return; }
-  S.bait--; save();
+  if (baitLeft() <= 0) {
+    const other = [...BAITS].reverse().find(b => S.baits[b.id] > 0);
+    if (!other) { say('🪱 Out of bait! Sail back to the dock and buy a pack at the market.'); return; }
+    toast(`${curBait().icon} Out of ${curBait().name}! Switched to ${other.icon} ${other.name}.`);
+    S.baitSel = other.id;
+  }
+  S.baits[curBait().id]--; save();
   const tip = rodTip();
   Object.assign(lure, { active:true, reeling:false, hooks:[], x: tip.x, y: tip.y });
   pointerScreen = p;
   updateHud();
-  if (S.bait === 0) setTimeout(() => toast('🪱 That was your last bait!'), 600);
+  if (baitLeft() === 0) { const b = curBait(); setTimeout(() => toast(`${b.icon} That was your last ${b.name}!`), 600); }
 }
 function reelIn() { if (lure.active) { lure.reeling = true; updateHud(); } }
 
@@ -1288,11 +1682,12 @@ function finishReel(instant) {
   const caught = lure.hooks;
   if (caught.length) {
     caught.forEach(f => {
-      S.bucket.push({ id: f.sp.id, filleted: false, value: 0 });
+      S.bucket.push({ id: f.sp.id, filleted: false, value: 0, uid: ++S.uid });
       S.seen[f.sp.id] = true;
       S.caught = (S.caught || 0) + 1;
       S.caughtEnv[f.sp.env] = (S.caughtEnv[f.sp.env] || 0) + 1;
     });
+    questProgress(caught);
     const boss = caught.find(f => f.sp.boss);
     if (boss) {
       monsterTimer = 45;
@@ -1410,6 +1805,13 @@ function checkHits() {
     const reach = (f.sp.look.eel ? f.sp.size * 0.5 : f.sp.size * 0.8) + 6;
     if (Math.hypot(lure.x - f.x, lure.y - f.y) > reach) continue;
 
+    const need = baitNeed(f.sp);
+    if (need > baitLv()) {
+      f.inv = 1.2;
+      addFloat(f.x, f.y - 18, `🙄 wants ${BAITS[need].icon}`, '#cfd8e3');
+      say(`The ${f.sp.name} won't bite ${curBait().name}. It wants ${BAITS[need].icon} ${BAITS[need].name}!`);
+      continue;
+    }
     if (bucketFull()) { say('Bucket full! Fillet and sell your fish first.'); f.inv = 1; continue; }
 
     const dmg = G().power;
@@ -1835,8 +2237,10 @@ function drawPlayer() {
 // ---------------- HUD ----------------
 function updateHud() {
   $('seaCoins').textContent = `🪙 ${fmt(S.coins)}`;
-  $('suppliesPill').textContent = `🪱 ${S.bait}` + (S.cannon ? ` · ⚫ ${S.balls}` : '');
-  $('suppliesPill').classList.toggle('full', S.bait <= 0);
+  $('suppliesPill').textContent = `${curBait().icon} ${baitLeft()}` + (S.cannon ? ` · ⚫ ${S.balls}` : '');
+  $('suppliesPill').title = `Using ${curBait().name}. Tap (or press B) to switch bait.`;
+  $('suppliesPill').classList.toggle('full', baitLeft() <= 0);
+  updateIcePill();
   $('gearPill').textContent = `${BOATS[tier()].name} · ${gearName('rod')} · ${gearName('lure')} (${G().power} dmg) · ${gearName('line')} · ${gearName('knife')}`;
   updateHudLive(true);
 }
@@ -2010,7 +2414,7 @@ function endBattle(won) {
   if (won) {
     const space = Math.max(0, G().cap - S.bucket.length);
     const taken = r.fish.slice(0, space);
-    taken.forEach(id => { S.bucket.push({ id, filleted: false, value: 0 }); S.seen[id] = true; });
+    taken.forEach(id => { S.bucket.push({ id, filleted: false, value: 0, uid: ++S.uid }); S.seen[id] = true; });
     const loot = Math.round(st.value * 0.1);
     S.coins += loot;
     msg = `🏴‍☠️ Nice shooting, ${angler()}! You beat ${r.name} and stole ${taken.length} fish and 🪙 ${fmt(loot)}.` +
@@ -2446,8 +2850,10 @@ $('filletClose').onclick = closeFillet;
 //  START
 // ======================================================================
 applyDevice();
+marketCatchUp();
 renderDock();
 loadLeaderboard();
+$('suppliesPill').onclick = switchBait;
 syncSoon();
 if (!S.gender || !S.device) openSetup();
 })();

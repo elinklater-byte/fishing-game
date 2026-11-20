@@ -244,3 +244,56 @@ body.touch .action-pad { position: absolute; right: 10px; bottom: 10px; display:
 }
 @media (orientation: portrait) and (max-width: 600px) { body.touch .rotate-tip { display: block; } body.touch .hint { margin-top: 52px; } }
 @media (max-height: 500px) { body.touch .act { width: 54px; height: 54px; font-size: 24px; } body.touch .act.cast { width: 72px; height: 72px; } body.touch .walk { width: 54px; height: 54px; } }
+
+/* ---------- quests ---------- */
+.small { font-size: 13px; }
+.quest-list { display: grid; gap: 10px; }
+.quest { border: 2px solid #d7c19d; border-radius: 12px; padding: 10px; background: #fff; }
+.quest.q1 { border-color: #9cc3e6; }
+.quest.q2 { border-color: #e2a35b; }
+.quest.done { border-color: #2e9d52; background: #effbf1; }
+.q-top { display: flex; justify-content: space-between; align-items: center; }
+.stars { color: #c48a0e; font-weight: 800; font-size: 14px; }
+.q-pay { font-size: 17px; }
+.q-text { font-weight: 700; margin: 4px 0; }
+.q-hint { font-size: 12px; color: #5d6b78; margin-bottom: 4px; }
+.q-bar { position: relative; height: 16px; background: #eadfc9; border-radius: 999px; overflow: hidden; margin: 6px 0; }
+.q-bar div { height: 100%; background: #2e9d52; border-radius: 999px; transition: width .3s; }
+.q-bar span { position: absolute; inset: 0; text-align: center; font-size: 11px; font-weight: 800; line-height: 16px; }
+.q-btns { display: flex; justify-content: flex-end; }
+
+/* ---------- market prices & selling ---------- */
+.card h3 { margin: 12px 0 6px; font-size: 16px; }
+.prices summary { cursor: pointer; font-weight: 800; }
+.prices summary small { font-weight: 400; color: #5d6b78; }
+.price-board { max-height: 230px; overflow-y: auto; margin: 6px 0 4px; border: 1px solid #e3d3b5; border-radius: 10px; padding: 2px 8px; background: #fff; }
+.price-row { display: grid; grid-template-columns: 1fr auto 72px; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px dashed #e3d3b5; font-size: 14px; }
+.price-row:last-child { border-bottom: 0; }
+.price-row b:last-child { text-align: right; }
+.trend small { color: #5d6b78; font-size: 11px; }
+.up { color: #2e9d52; }
+.down { color: #d2483f; }
+.flat { color: #8a96a2; }
+.pct { font-weight: 800; font-size: 12px; }
+.fillet-row { padding: 8px 0; border-bottom: 1px dashed #d7c19d; }
+.fr-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; font-size: 14px; }
+.fr-name { font-weight: 700; }
+.fr-act { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.fr-act label { font-size: 13px; font-weight: 700; }
+.fr-act input { width: 86px; font-size: 15px; padding: 5px 6px; border: 2px solid #c99b62; border-radius: 8px; }
+.fr-said { font-size: 13px; color: #9b3a20; min-height: 0; margin-top: 3px; }
+.fr-said:empty { display: none; }
+.spoil { color: #b0452f; }
+.supply.using { background: #eaf6ec; border-radius: 10px; }
+.using-tag { font-size: 12px; font-weight: 800; color: #2e9d52; padding: 0 6px; }
+.supply .btn.ghost { color: #2a74c9; }
+
+/* ---------- fridge ---------- */
+.fridge { background: #f2f9ff; border-color: #8fb9dc; }
+.fridge-head { margin-bottom: 6px; }
+.ice-meter { position: relative; height: 22px; background: #d9e6ef; border-radius: 999px; overflow: hidden; }
+.ice-meter div { height: 100%; background: linear-gradient(90deg, #8fd3ff, #d8f2ff); transition: width .9s linear; }
+.ice-meter span { position: absolute; inset: 0; text-align: center; font-size: 13px; font-weight: 800; line-height: 22px; }
+.fridge .row-btns { margin: 8px 0; }
+.fridge-buy { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #8fb9dc; font-size: 14px; }
+.pill.tap { cursor: pointer; }
