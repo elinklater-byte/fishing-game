@@ -1,0 +1,9 @@
+{
+  "name": "fishing-game",
+  "private": true,
+  "type": "module",
+  "description": "Hook, Line & Sinker: a browser fishing game with an online leaderboard",
+  "dependencies": {
+    "@vercel/blob": "2.9.0"
+  }
+}
