@@ -9,7 +9,7 @@ const PX_PER_M = 10;                          // 10px of depth = 1 metre
 const SEA_DEPTH = 2500;                       // sea floor is 250 m down
 const WORLD_H = SURF + SEA_DEPTH;
 const WRECK_CHANCE = 0.3;                     // chance a trip has a shipwreck
-const LV_PER_TIER = 4;                        // gear levels per boat
+const LV_PER_TIER = 6;                        // gear levels per boat
 
 // ======================================================================
 //  FISH — all real ocean species.  depth in px (10px = 1 m)
@@ -93,15 +93,35 @@ const GEAR_KEYS = Object.keys(GEAR);
 const LURE_COLORS = ['#9aa4ad', '#e9a91c', '#e6eef5', '#f4f4f4', '#7dff9a', '#ffd34d', '#bff4ff'];
 const ROD_COLORS  = ['#8b5a2b', '#c9a65b', '#4aa3df', '#555', '#222', '#9fa8b0', '#d4a017'];
 
-// g = overall gear power index (0..27): boat tier * 4 + level
+// g = overall gear power index (0..41): boat tier * 6 + level
 const STAT = {
-  rod:    g => 180 + g * 18,                       // lure speed
-  lure:   g => 1 + Math.floor(g / 2),              // damage per hit
-  line:   g => 220 + g * 90,                       // slack length
-  knife:  g => ({ chops: Math.max(1, 4 - Math.floor(g / 7)), zone: g * 25, mult: Math.round((1 + g * 0.05) * 100) / 100 }),
-  bucket: g => 4 + Math.floor(g / 2),
+  rod:    g => 180 + g * 12,                       // lure speed
+  lure:   g => Math.round((2 * Math.floor(g / 6) + 1 + (g % 6) * 0.4) * 10) / 10,   // damage per hit
+  line:   g => 220 + g * 58,                       // slack length
+  knife:  g => ({ chops: Math.max(1, 4 - Math.floor(g / 10)), zone: g * 16, mult: Math.round((1 + g * 0.033) * 100) / 100 }),
+  bucket: g => 4 + Math.floor(g / 6) * 5 + (g % 6),
 };
-const gearCost = (key, g) => Math.round(20 * Math.pow(1.33, g) * GEAR[key].costMult / 5) * 5;
+const gearCost = (key, g) => Math.round(20 * Math.pow(1.22, g) * GEAR[key].costMult / 5) * 5;
+
+// Special gear: these are kept when you buy a new boat.
+const HOOKS = [
+  { name:'Single Hook', n:1, cost:0 },
+  { name:'Double Hook', n:2, cost:2500 },
+  { name:'Triple Hook', n:3, cost:10000 },
+  { name:'Quad Hook',   n:4, cost:35000 },
+  { name:'Mega Rig',    n:5, cost:100000 },
+];
+const CANNONS = [
+  { name:'No Cannon',     cost:0 },
+  { name:'Old Cannon',    cost:300,   power:1, zone:0.22, reload:1.1 },
+  { name:'Iron Cannon',   cost:1800,  power:2, zone:0.26, reload:1.0 },
+  { name:'Bronze Cannon', cost:7000,  power:3, zone:0.30, reload:0.9 },
+  { name:'Steel Cannon',  cost:25000, power:5, zone:0.34, reload:0.8 },
+  { name:'Dragon Cannon', cost:80000, power:8, zone:0.40, reload:0.7 },
+];
+const RIVAL_NAMES = ['Captain Barnacle', 'Salty Sue', 'One-Eyed Pete', 'Rusty Ray', 'Big Bertha', 'Fishhook Fran', 'Old Man Moby', 'Gill Gordon', 'Mean Marlene', 'Skipper Skip'];
+const RIVAL_COLORS = [['#6d3fa0', '#3e2160'], ['#2f7d4a', '#1c4a2c'], ['#b0452f', '#6a2318'], ['#3a5f8f', '#203752'], ['#8a6d2a', '#4f3d14']];
+const hullHP = () => 12 + tier() * 6;
 const statText = {
   rod:    g => `Lure speed ${STAT.rod(g)}`,
   lure:   g => `Hits fish for ${STAT.lure(g)} damage`,
@@ -115,7 +135,7 @@ const statText = {
 // ======================================================================
 const SAVE_KEY = 'hook-line-sinker-v2';
 function freshState() {
-  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, bucket:[], seen:{}, earned:0 };
+  return { coins:100, tier:-1, hasRod:false, lv:{ rod:0, lure:0, line:0, knife:0, bucket:0 }, hooks:0, cannon:0, bucket:[], seen:{}, earned:0 };
 }
 function load() {
   try {
@@ -137,6 +157,7 @@ const G = () => ({
   len: STAT.line(gIdx('line')),
   knife: STAT.knife(gIdx('knife')),
   cap: STAT.bucket(gIdx('bucket')),
+  hooks: HOOKS[S.hooks].n,
 });
 const allGearMaxed = () => GEAR_KEYS.every(k => S.lv[k] >= LV_PER_TIER - 1);
 
@@ -463,6 +484,10 @@ function renderDock() {
   } else {
     GEAR_KEYS.forEach(key => shop.appendChild(gearCard(key)));
     shop.appendChild(boatCard());
+    shop.appendChild(specialCard('🪝', 'Multi-Hook', HOOKS, 'hooks',
+      h => h.n > 1 ? `Catch ${h.n} fish on one cast` : 'Catches 1 fish per cast'));
+    shop.appendChild(specialCard('💣', 'Cannon', CANNONS, 'cannon',
+      c => c.power ? `${c.power} damage per shot · attack other fishermen` : 'Buy one to attack other fishermen and steal their fish'));
   }
   $('shopTitle').textContent = starterDone ? `🛒 Upgrade Shop — ${BOATS[tier()].name} gear` : '🛒 Starter Shop: buy these first!';
 
@@ -534,27 +559,50 @@ function boatCard() {
   const el = document.createElement('div');
   el.className = 'item boat';
   const bars = BOATS.map((_, i) => `<i class="${i <= tier() ? 'on' : ''}"></i>`).join('');
-  const done = GEAR_KEYS.filter(k => S.lv[k] >= LV_PER_TIER - 1).length;
   const unlocks = next ? SPECIES.filter(s => s.tier === tier() + 1 && !s.wreck).map(s => s.name).join(' & ') : '';
-  const ready = allGearMaxed();
   el.innerHTML = `
     <div class="top"><span class="icon">⛵</span>
       <div><div class="kind">Boat</div><div class="now">${BOATS[tier()].name}</div></div></div>
     <div class="levels">${bars}</div>
+    <div class="stat">Hull: ${hullHP()} HP in cannon battles</div>
     ${next ? `
       <div class="next">Next: <b>${next.name}</b><br>Unlocks ${unlocks}.<br>
-        <small>Your gear resets to Lv 1 of a <b>stronger set</b> (${GEAR.rod.names[tier() + 1]}, ${GEAR.lure.names[tier() + 1]}…)</small></div>
-      ${ready ? '' : `<div class="lock">🔒 Max out all your gear first (${done}/5 maxed)</div>`}
-      <button class="btn ${ready && S.coins >= next.cost ? 'green' : 'blue'}" ${ready && S.coins >= next.cost ? '' : 'disabled'}>Buy boat · 🪙 ${fmt(next.cost)}</button>`
+        <small>Your gear moves up to Lv 1 of a <b>stronger set</b> (${GEAR.rod.names[tier() + 1]}, ${GEAR.lure.names[tier() + 1]}…), which is at least as good as your best gear now.</small></div>
+      <button class="btn ${S.coins >= next.cost ? 'green' : 'blue'}" ${S.coins >= next.cost ? '' : 'disabled'}>Buy boat · 🪙 ${fmt(next.cost)}</button>`
     : `<div class="maxed">★ The best boat on the sea!</div>`}`;
   const b = el.querySelector('button');
   if (b) b.onclick = () => {
-    if (!allGearMaxed() || S.coins < next.cost) return;
+    if (S.coins < next.cost) return;
     S.coins -= next.cost;
     S.tier++;
     GEAR_KEYS.forEach(k => { S.lv[k] = 0; });
     save();
     toast(`⛵ Welcome aboard the ${next.name}! Your gear moved up to the ${GEAR.rod.names[tier()]} set.`, 4000);
+    renderDock();
+  };
+  return el;
+}
+
+// Multi-Hook and Cannon: bought once, kept forever (not reset by a new boat)
+function specialCard(icon, kind, list, key, stat) {
+  const lv = S[key], cur = list[lv], next = list[lv + 1];
+  const el = document.createElement('div');
+  el.className = 'item special';
+  const bars = list.slice(1).map((_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
+  el.innerHTML = `
+    <div class="top"><span class="icon">${icon}</span>
+      <div><div class="kind">${kind} · kept with every boat</div><div class="now">${cur.name}</div></div></div>
+    <div class="levels">${bars}</div>
+    <div class="stat">${stat(cur)}</div>
+    ${next
+      ? `<div class="next">${lv ? 'Upgrade to' : 'Buy'} <b>${next.name}</b><br>${stat(next)}</div>
+         <button class="btn ${S.coins >= next.cost ? 'green' : 'blue'}" ${S.coins >= next.cost ? '' : 'disabled'}>${lv ? 'Upgrade' : 'Buy'} · 🪙 ${fmt(next.cost)}</button>`
+      : `<div class="maxed">★ Fully upgraded!</div>`}`;
+  const b = el.querySelector('button');
+  if (b) b.onclick = () => {
+    if (S.coins < next.cost) return;
+    S.coins -= next.cost; S[key]++; save();
+    toast(`${icon} You got the ${next.name}!`);
     renderDock();
   };
   return el;
@@ -591,7 +639,7 @@ function renderGuide() {
     cx.restore();
     d.appendChild(c);
     d.insertAdjacentHTML('beforeend',
-      `<b>${known ? sp.name : '???'}</b>${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m · ${sp.hp} HP · 🪙${fmt(sp.value)}` +
+      `<b>${known ? sp.name : '???'}</b>${Math.round(sp.min / PX_PER_M)}–${Math.round(sp.max / PX_PER_M)} m · ${sp.hp} HP` +
       (sp.wreck ? `<br><i>Only near shipwrecks</i>` :
        sp.tier > tier() ? `<br><i>Needs ${BOATS[sp.tier].name}</i>` : '') +
       (known ? `<span class="gfact">${sp.fact}</span>` : ''));
@@ -616,22 +664,6 @@ $('resetBtn').onclick = () => {
 };
 
 // ======================================================================
-//  FISH FACTS (bottom right while at sea)
-// ======================================================================
-let factTimer = 0;
-function showFact(sp, caught) {
-  $('factTitle').textContent = caught ? `🎣 ${sp.name}` : `🐟 Fish fact: ${sp.name}`;
-  $('factText').textContent = sp.fact;
-  const box = $('fact');
-  box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop');
-  factTimer = 0;
-}
-function randomFact() {
-  const pool = SPECIES.filter(s => s.tier <= tier() + 1);
-  showFact(pool[Math.floor(Math.random() * pool.length)], false);
-}
-
-// ======================================================================
 //  SEA SCREEN
 // ======================================================================
 const cv = $('game');
@@ -641,7 +673,7 @@ let fish = [], floats = [], bubbles = [], clouds = [], wrecks = [];
 const keys = {};
 const BOAT_X = 560;
 const player = { x: BOAT_X, targetX: null, facing: -1 };
-const lure = { active:false, reeling:false, x:0, y:0, hooked:null, diving:false };
+const lure = { active:false, reeling:false, x:0, y:0, hooks:[], diving:false };
 let pointerScreen = null;
 let camY = 0;
 let msgCooldown = 0;
@@ -652,7 +684,7 @@ function deckY() { return SURF - 8 + Math.sin(T * 1.6) * 2; }
 function fishingZone() { return player.x <= BOAT_X - boatW() / 2 + boatW() * 0.38; }
 function filletZone()  { return player.x >= BOAT_X + boatW() / 2 - boatW() * 0.32; }
 function rodTip() { return { x: player.x - 52, y: deckY() - 58 }; }
-function bucketCount() { return S.bucket.length + (lure.hooked ? 1 : 0); }
+function bucketCount() { return S.bucket.length + lure.hooks.length; }
 function bucketFull() { return bucketCount() >= G().cap; }
 function lureReach() { return G().len - 60; }
 
@@ -661,10 +693,11 @@ function enterSea() {
   $('sea').classList.remove('hidden');
   fish = []; floats = []; bubbles = []; wrecks = [];
   camY = 0; pointerScreen = null;
+  rival = null; rivalTimer = rand(15, 30);
   clouds = Array.from({ length: 5 }, () => ({ x: rand(0, W), y: rand(15, 70), s: rand(0.6, 1.3), v: rand(6, 16) }));
   player.x = BOAT_X; player.targetX = null;
-  Object.assign(lure, { active:false, reeling:false, hooked:null });
-  while (fish.length < targetFishCount()) spawnFish(true);
+  Object.assign(lure, { active:false, reeling:false, hooks:[] });
+  while (unitCount() < targetFishCount()) spawnFish(true);
 
   if (Math.random() < WRECK_CHANCE) {
     const w = { x: rand(190, W - 190), tilt: rand(-0.1, 0.1), flip: Math.random() < 0.5 ? -1 : 1 };
@@ -674,7 +707,6 @@ function enterSea() {
 
   running = true; last = performance.now();
   updateHud();
-  randomFact();
   if (wrecks.length) {
     const canReach = lureReach() >= SEA_DEPTH - 150;
     toast(`📡 Sonar ping! A shipwreck is resting on the sea floor (${SEA_DEPTH / PX_PER_M} m)` +
@@ -697,7 +729,7 @@ function leaveSea() {
   if (raw) toast(`You still have ${raw} raw fish. Fillet them on your boat before selling!`, 3200);
 }
 
-function targetFishCount() { return 30 + tier() * 5; }
+function targetFishCount() { return 24 + tier() * 4; }
 
 function makeFish(sp, x, baseY, dir, speed) {
   return {
@@ -711,17 +743,33 @@ function makeFish(sp, x, baseY, dir, speed) {
 
 // Pick a depth first (so fish fill the whole water column), then a species
 // that lives there. Schooling species arrive as a group swimming together.
+// Each spawn is one "unit": a single fish, or (1 time in 8) a whole school.
+const SCHOOL_CHANCE = 1 / 8;
+let unitId = 0;
+function pickWeighted(list) {
+  let r = Math.random() * list.reduce((a, s) => a + s.weight, 0);
+  for (const s of list) { r -= s.weight; if (r <= 0) return s; }
+  return list[0];
+}
 function spawnFish(anywhere) {
   const pool = SPECIES.filter(s => !s.wreck && s.tier <= tier());
-  const depth = rand(15, Math.max(...pool.map(s => s.max)));
-  let here = pool.filter(s => depth >= s.min && depth <= s.max);
-  if (!here.length) here = [pool.reduce((a, s) => Math.abs((s.min + s.max) / 2 - depth) < Math.abs((a.min + a.max) / 2 - depth) ? s : a)];
-  let r = Math.random() * here.reduce((a, s) => a + s.weight, 0), sp = here[0];
-  for (const s of here) { r -= s.weight; if (r <= 0) { sp = s; break; } }
+  const schoolers = pool.filter(s => s.school);
+  const isSchool = schoolers.length && Math.random() < SCHOOL_CHANCE;
+  let sp, depth;
+  if (isSchool) {
+    sp = pickWeighted(schoolers);
+    depth = rand(sp.min, sp.max);
+  } else {
+    depth = rand(15, Math.max(...pool.map(s => s.max)));
+    let here = pool.filter(s => depth >= s.min && depth <= s.max);
+    if (!here.length) here = [pool.reduce((a, s) => Math.abs((s.min + s.max) / 2 - depth) < Math.abs((a.min + a.max) / 2 - depth) ? s : a)];
+    sp = pickWeighted(here);
+  }
+  const unit = ++unitId;
   const dir = Math.random() < 0.5 ? 1 : -1;
   const x0 = anywhere ? rand(60, W - 60) : (dir > 0 ? -70 : W + 70);
   const y0 = SURF + clamp(depth, sp.min, sp.max);
-  if (sp.school) {
+  if (isSchool) {
     const n = Math.round(rand(sp.school[0], sp.school[1]));
     const speed = sp.speed * rand(0.85, 1.1);
     for (let i = 0; i < n; i++) {
@@ -729,13 +777,17 @@ function spawnFish(anywhere) {
       const x = x0 - dir * (col * sp.size * 2.3 + rand(0, sp.size));
       const y = clamp(y0 + (row - 1) * sp.size * 1.3 + rand(-4, 4), SURF + sp.min, SURF + sp.max);
       const f = makeFish(sp, x, y, dir, speed);
-      f.amp = rand(2, 4); f.phase = rand(0, 1);
+      f.amp = rand(2, 4); f.phase = rand(0, 1); f.unit = unit;
       fish.push(f);
     }
   } else {
-    fish.push(makeFish(sp, x0, y0, dir));
+    const f = makeFish(sp, x0, y0, dir);
+    f.unit = unit;
+    fish.push(f);
   }
 }
+// schools count as one, so they don't crowd out single fish
+function unitCount() { return new Set(fish.filter(f => !f.home && !f.hooked).map(f => f.unit)).size; }
 
 function spawnWreckFish(w) {
   const deep = SPECIES.filter(s => !s.wreck && s.tier <= tier()).slice(-3);
@@ -761,6 +813,7 @@ cv.addEventListener('pointerdown', e => {
     else { player.targetX = BOAT_X - boatW() / 2 + 10; say('Walk to the LEFT side of the boat to fish!'); }
   } else {
     if (lure.active) { reelIn(); return; }
+    if (rivalHit(p)) { openBattle(); return; }
     player.targetX = clamp(p.x, BOAT_X - boatW() / 2 + 10, BOAT_X + boatW() / 2 - 10);
   }
 });
@@ -771,6 +824,7 @@ cv.addEventListener('pointermove', e => {
 
 window.addEventListener('keydown', e => {
   if (!running) return;
+  if (battleOpen()) { if (e.code === 'Space') { e.preventDefault(); fire(); } return; }
   keys[e.key.toLowerCase()] = true;
   if (e.code === 'Space') {
     e.preventDefault();
@@ -800,23 +854,23 @@ function say(msg) { if (msgCooldown <= 0) { toast(msg); msgCooldown = 2; } }
 function cast(p) {
   if (bucketFull()) { say('Your bucket is full! Walk right to fillet, then sail back to sell.'); return; }
   const tip = rodTip();
-  Object.assign(lure, { active:true, reeling:false, hooked:null, x: tip.x, y: tip.y });
+  Object.assign(lure, { active:true, reeling:false, hooks:[], x: tip.x, y: tip.y });
   pointerScreen = p;
   updateHud();
 }
 function reelIn() { if (lure.active) { lure.reeling = true; updateHud(); } }
 
 function finishReel(instant) {
-  if (lure.hooked) {
-    const f = lure.hooked;
-    S.bucket.push({ id: f.sp.id, filleted: false, value: 0 });
-    S.seen[f.sp.id] = true;
-    fish = fish.filter(x => x !== f);
-    if (!instant) { addFloat(rodTip().x, rodTip().y - 10, `${f.sp.name} in the bucket!`, '#ffe680'); showFact(f.sp, true); }
+  const caught = lure.hooks;
+  if (caught.length) {
+    caught.forEach(f => { S.bucket.push({ id: f.sp.id, filleted: false, value: 0 }); S.seen[f.sp.id] = true; });
+    fish = fish.filter(x => !caught.includes(x));
+    if (!instant) addFloat(rodTip().x, rodTip().y - 10,
+      caught.length > 1 ? `${caught.length} fish in the bucket!` : `${caught[0].sp.name} in the bucket!`, '#ffe680');
     save();
-    if (bucketFull() && !instant) setTimeout(() => toast('Bucket full! Walk to the right side and fillet your fish 🔪', 3000), 300);
   }
-  Object.assign(lure, { active:false, reeling:false, hooked:null });
+  Object.assign(lure, { active:false, reeling:false, hooks:[] });
+  if (caught.length && bucketFull() && !instant) setTimeout(() => toast('Bucket full! Walk to the right side and fillet your fish 🔪', 3000), 300);
   updateHud();
 }
 
@@ -824,8 +878,7 @@ function finishReel(instant) {
 function update(dt) {
   T += dt;
   msgCooldown -= dt;
-  factTimer += dt;
-  if (factTimer > 16) randomFact();
+  updateRival(dt);
 
   if (!lure.active) {
     let dx = 0;
@@ -875,7 +928,7 @@ function update(dt) {
 
   for (const f of fish) {
     f.inv -= dt; f.flee -= dt; f.flash -= dt;
-    if (f.hooked) { f.x = lure.x + 4; f.y = lure.y + f.sp.size * 0.3; continue; }
+    if (f.hooked) { const i = lure.hooks.indexOf(f); f.x = lure.x + 4 + (i % 2 ? -1 : 1) * i * 6; f.y = lure.y + f.sp.size * 0.3 + i * 14; continue; }
     if (f.home) {
       if (f.x > f.home.x + f.range) f.dir = -1;
       if (f.x < f.home.x - f.range) f.dir = 1;
@@ -886,7 +939,7 @@ function update(dt) {
     if (Math.random() < dt * 0.12) bubbles.push({ x: f.x + f.dir * f.sp.size, y: f.y, r: rand(1, 2.5), v: rand(15, 35) });
   }
   fish = fish.filter(f => f.hooked || f.home || (f.x > -260 && f.x < W + 260));
-  while (fish.filter(f => !f.home).length < targetFishCount()) spawnFish(false);
+  while (unitCount() < targetFishCount()) spawnFish(false);
   wreckTimer += dt;
   if (wreckTimer > 8) {
     wreckTimer = 0;
@@ -903,7 +956,7 @@ function update(dt) {
 }
 
 function checkHits() {
-  if (lure.hooked) return;
+  if (lure.hooks.length >= G().hooks) return;
   for (const f of fish) {
     if (f.hooked || f.inv > 0) continue;
     const reach = (f.sp.look.eel ? f.sp.size * 0.5 : f.sp.size * 0.8) + 6;
@@ -916,14 +969,17 @@ function checkHits() {
     S.seen[f.sp.id] = true;
     if (f.hp <= 0) {
       f.hooked = true;
-      lure.hooked = f;
-      lure.reeling = true;
-      addFloat(f.x, f.y - 20, `Caught a ${f.sp.name}!`, '#ffe680');
+      lure.hooks.push(f);
+      const left = G().hooks - lure.hooks.length;
+      if (left <= 0 || bucketFull()) lure.reeling = true;
+      addFloat(f.x, f.y - 20, left > 0 && !bucketFull()
+        ? `Caught a ${f.sp.name}! (${left} hook${left > 1 ? 's' : ''} left)` : `Caught a ${f.sp.name}!`, '#ffe680');
       updateHud();
     } else {
       f.inv = 0.5; f.flee = 0.8; f.flash = 0.25;
-      addFloat(f.x, f.y - 18, `-${dmg}  (${f.hp} left)`, '#ff9b8a');
-      if (f.hp === f.maxHp - dmg) say(`Strong fish! Hit the ${f.sp.name} ${Math.ceil(f.hp / dmg)} more time${Math.ceil(f.hp / dmg) > 1 ? 's' : ''}!`);
+      addFloat(f.x, f.y - 18, `-${dmg}  (${Math.round(f.hp * 10) / 10} left)`, '#ff9b8a');
+      if (!f.wasHit) say(`Strong fish! Hit the ${f.sp.name} ${Math.ceil(f.hp / dmg)} more time${Math.ceil(f.hp / dmg) > 1 ? 's' : ''}!`);
+      f.wasHit = true;
     }
     return;
   }
@@ -1020,9 +1076,15 @@ function draw() {
     ctx.quadraticCurveTo((tip.x + lure.x) / 2 - 10, (tip.y + lure.y) / 2 + 20, lure.x, lure.y);
     ctx.stroke();
     drawLure(lure.x, lure.y);
+    if (G().hooks > 1) {
+      ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillText(`🪝 ${lure.hooks.length}/${G().hooks}`, lure.x + 13, lure.y - 7);
+      ctx.fillStyle = '#ffe680'; ctx.fillText(`🪝 ${lure.hooks.length}/${G().hooks}`, lure.x + 12, lure.y - 8);
+    }
   }
 
   if (top < SURF + 40) {
+    drawRival();
     drawBoat();
     drawPlayer();
     ctx.fillStyle = 'rgba(47,143,208,.55)';
@@ -1203,7 +1265,7 @@ function drawPlayer() {
     ctx.beginPath(); ctx.moveTo(x, y - 42); ctx.lineTo(x - 12, y - 38); ctx.stroke();
     ctx.strokeStyle = ROD_COLORS[tier()];
     ctx.lineWidth = 3;
-    const bend = lure.hooked ? 10 + Math.sin(T * 20) * 4 : 0;
+    const bend = lure.hooks.length ? 10 + Math.sin(T * 20) * 4 : 0;
     ctx.beginPath(); ctx.moveTo(x - 10, y - 32);
     ctx.quadraticCurveTo(x - 30, y - 48 + bend, tip.x, tip.y + bend * 0.5); ctx.stroke();
     if (!lure.active) {
@@ -1228,7 +1290,7 @@ let lastHudKey = '';
 function updateHudLive(force) {
   const cap = G().cap, n = S.bucket.length;
   const raw = S.bucket.some(f => !f.filleted);
-  const key = [n, cap, lure.active, lure.reeling, filletZone(), raw].join();
+  const key = [n, cap, lure.active, lure.reeling, filletZone(), raw, !!rivalVisible()].join();
   if (key === lastHudKey && !force) return;
   lastHudKey = key;
   const pill = $('bucketPill');
@@ -1236,16 +1298,327 @@ function updateHudLive(force) {
   pill.classList.toggle('full', n >= cap);
   $('reelBtn').classList.toggle('hidden', !lure.active || lure.reeling);
   $('filletBtn').classList.toggle('hidden', !(filletZone() && raw && !lure.active));
+  $('attackBtn').classList.toggle('hidden', !(rivalVisible() && S.cannon && !lure.active));
 }
 
 function loop(now) {
   if (!running) return;
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if ($('fillet').classList.contains('hidden')) update(dt);
+  if ($('fillet').classList.contains('hidden') && !battleOpen()) update(dt);
   draw();
   requestAnimationFrame(loop);
 }
+
+// ======================================================================
+//  RIVAL FISHERMEN & CANNON BATTLES
+//  Rivals sail past now and then. With a cannon you can attack them:
+//  win and you steal their fish, lose and they take 25% of your coins
+//  and half your fish. The better their catch, the tougher they are.
+// ======================================================================
+let rival = null, rivalTimer = 0;
+
+function spawnRival() {
+  const roll = Math.random();
+  const t = clamp(tier() + (roll < 0.5 ? 0 : roll < 0.8 ? 1 : -1), 0, BOATS.length - 1);
+  const pool = SPECIES.filter(s => !s.wreck && s.tier <= t);
+  const n = Math.round(rand(2, 3 + t));
+  const fishIds = Array.from({ length: n }, () => pool[Math.min(pool.length - 1, Math.floor(pool.length * Math.sqrt(Math.random())))].id);
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  rival = {
+    name: RIVAL_NAMES[Math.floor(Math.random() * RIVAL_NAMES.length)],
+    colors: RIVAL_COLORS[Math.floor(Math.random() * RIVAL_COLORS.length)],
+    tier: t, w: BOATS[t].w * 0.8, x: dir > 0 ? -40 : W + 40, dir, speed: rand(26, 38),
+    fish: fishIds, interval: rand(1.8, 2.6),
+  };
+  toast(`⛵ ${rival.name} is sailing by with ${n} fish` + (S.cannon ? '. Click their boat to attack! 💣' : '.'), 3200);
+  updateHud();
+}
+
+function updateRival(dt) {
+  rivalTimer -= dt;
+  if (!rival && rivalTimer <= 0) spawnRival();
+  if (rival) {
+    rival.x += rival.dir * rival.speed * dt;
+    if (rival.x < -160 || rival.x > W + 160) { rival = null; rivalTimer = rand(45, 80); updateHud(); }
+  }
+}
+
+function rivalStats(r) {
+  const value = r.fish.reduce((a, id) => a + speciesById(id).value, 0);
+  return { value, hp: Math.round(6 + Math.sqrt(value) * 0.9), dmg: 1 + Math.floor(Math.sqrt(value) / 12), interval: r.interval };
+}
+function difficulty(r) {
+  const st = rivalStats(r), c = CANNONS[S.cannon];
+  const myDps = c.power * 0.75 / c.reload;
+  const taken = (st.hp / myDps) * st.dmg * 0.7 / st.interval;
+  const ratio = taken / hullHP();
+  return ratio < 0.45 ? ['Easy', '#2e9d52'] : ratio < 0.8 ? ['Fair', '#b8860b'] : ratio < 1.15 ? ['Hard', '#d2683f'] : ['Very hard', '#b3261e'];
+}
+
+function drawRival() {
+  if (!rival) return;
+  const r = rival, y = SURF - 4 + Math.sin(T * 1.4 + 1) * 2, w = r.w, hh = 12 + r.tier * 3;
+  ctx.save();
+  ctx.translate(r.x, y);
+  ctx.globalAlpha = 0.95;
+  // hull
+  ctx.fillStyle = r.colors[0];
+  ctx.beginPath(); ctx.moveTo(-w / 2 - 8, 0); ctx.lineTo(w / 2 + 10, 0); ctx.lineTo(w / 2 - 6, hh); ctx.lineTo(-w / 2 + 10, hh); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = r.colors[1]; ctx.fillRect(-w / 2 - 4, 3, w + 12, 3);
+  // cabin
+  if (r.tier >= 2) { ctx.fillStyle = '#eee'; ctx.fillRect(-w * 0.12, -26, w * 0.24, 26); ctx.fillStyle = '#7fc3f0'; ctx.fillRect(-w * 0.12 + 4, -21, w * 0.24 - 8, 8); }
+  // fisherman
+  const fx = r.dir > 0 ? w * 0.3 : -w * 0.3;
+  ctx.fillStyle = r.colors[1]; ctx.fillRect(fx - 7, -36, 14, 22);
+  ctx.fillStyle = '#e9c3a0'; ctx.beginPath(); ctx.arc(fx, -42, 7, 0, 7); ctx.fill();
+  ctx.fillStyle = '#333'; ctx.fillRect(fx - 9, -50, 18, 4); ctx.fillRect(fx - 5, -56, 10, 7);
+  ctx.strokeStyle = '#5c3a1a'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(fx, -30); ctx.lineTo(fx + r.dir * 40, -62); ctx.stroke();
+  // flag
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-w * 0.3, 0); ctx.lineTo(-w * 0.3, -60); ctx.stroke();
+  ctx.fillStyle = r.colors[0];
+  ctx.beginPath(); ctx.moveTo(-w * 0.3, -60); ctx.lineTo(-w * 0.3 - r.dir * 22, -54 + Math.sin(T * 5) * 2); ctx.lineTo(-w * 0.3, -48); ctx.fill();
+  // name tag
+  ctx.globalAlpha = 1;
+  ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+  const label = `${r.name} · ${r.fish.length} fish${S.cannon ? ' · 💣 click to attack' : ''}`;
+  const tw = ctx.measureText(label).width + 12;
+  ctx.fillStyle = 'rgba(10,25,45,.7)'; ctx.fillRect(-tw / 2, -84, tw, 18);
+  ctx.fillStyle = '#fff'; ctx.fillText(label, 0, -71);
+  ctx.restore();
+}
+const rivalVisible = () => rival && rival.x > -30 && rival.x < W + 30;
+function rivalHit(p) {
+  return rivalVisible() && Math.abs(p.x - rival.x) < rival.w / 2 + 20 && p.y + camY > SURF - 90 && p.y + camY < SURF + 25;
+}
+
+// ---------------- battle screen ----------------
+const bcv = $('battleCanvas'), bx = bcv.getContext('2d');
+const BW = bcv.width, BH = bcv.height;   // 460 x 250
+let battle = null;
+const battleOpen = () => !$('battle').classList.contains('hidden');
+
+function openBattle() {
+  if (!rival) return;
+  if (!S.cannon) { toast('Buy a cannon at the dock to attack other fishermen! 💣'); return; }
+  if (lure.active) { say('Reel in your line first!'); return; }
+  const st = rivalStats(rival), [diff, col] = difficulty(rival);
+  const best = rival.fish.map(speciesById).reduce((a, s) => s.value > a.value ? s : a);
+  battle = { phase: 'prompt', st };
+  $('battleTitle').textContent = `⚔️ ${rival.name}`;
+  $('battleSub').innerHTML = `Carrying <b>${rival.fish.length} fish</b>, best catch: <b>${best.name}</b>.<br>
+    Difficulty: <b style="color:${col}">${diff}</b> · their boat ${st.hp} HP vs your ${BOATS[tier()].name} ${hullHP()} HP<br>
+    <small>Win: steal their fish. Lose: they take 25% of your coins and half your fish.</small>`;
+  $('battleStart').classList.remove('hidden');
+  $('battleFight').classList.add('hidden');
+  $('battleEnd').classList.add('hidden');
+  $('battle').classList.remove('hidden');
+  requestAnimationFrame(battleLoop);
+}
+
+function startFight() {
+  const st = battle.st;
+  Object.assign(battle, {
+    phase: 'fight', myHp: hullHP(), myMax: hullHP(), rHp: st.hp, rMax: st.hp, rDmg: st.dmg, rInterval: st.interval,
+    rTimer: 1.6, reload: 0, t: 0, balls: [], booms: [], texts: [], last: performance.now(),
+  });
+  $('battleSub').textContent = 'Click FIRE (or press Space) when the needle is in the green. The dark middle does double damage!';
+  $('battleStart').classList.add('hidden');
+  $('battleFight').classList.remove('hidden');
+}
+
+function needlePos() { return 0.5 + 0.5 * Math.sin(battle.t * 3.1); }
+
+function fire() {
+  if (!battle || battle.phase !== 'fight' || battle.reload > 0) return;
+  const c = CANNONS[S.cannon];
+  const d = Math.abs(needlePos() - 0.5);
+  const hit = d < c.zone / 2, crit = d < c.zone / 8;
+  battle.balls.push({ from: 'me', t: 0, dur: 0.75, hit, crit, dmg: c.power * (crit ? 2 : 1), miss: rand(30, 60) });
+  battle.reload = c.reload;
+}
+
+function endBattle(won) {
+  battle.phase = 'result';
+  const r = rival, st = battle.st;
+  let msg;
+  if (won) {
+    const space = Math.max(0, G().cap - S.bucket.length);
+    const taken = r.fish.slice(0, space);
+    taken.forEach(id => { S.bucket.push({ id, filleted: false, value: 0 }); S.seen[id] = true; });
+    const loot = Math.round(st.value * 0.1);
+    S.coins += loot;
+    msg = `🏴‍☠️ You beat ${r.name}! You stole ${taken.length} fish and 🪙 ${fmt(loot)}.` +
+      (taken.length < r.fish.length ? ` Your bucket was too full for ${r.fish.length - taken.length} more.` : '');
+  } else {
+    const lostCoins = Math.floor(S.coins * 0.25);
+    S.coins -= lostCoins;
+    const nLose = Math.ceil(S.bucket.length / 2);
+    const lost = [];
+    for (let i = 0; i < nLose; i++) lost.push(S.bucket.splice(Math.floor(Math.random() * S.bucket.length), 1)[0]);
+    msg = `💥 ${r.name} won! You lost 🪙 ${fmt(lostCoins)}` + (lost.length ? ` and ${lost.length} fish.` : '.');
+  }
+  save();
+  $('battleSub').textContent = msg;
+  $('battleFight').classList.add('hidden');
+  $('battleEnd').classList.remove('hidden');
+  rival = null; rivalTimer = rand(45, 80);
+}
+
+function closeBattle() {
+  $('battle').classList.add('hidden');
+  battle = null;
+  updateHud();
+}
+
+function drawBattleBoat(x, y, w, colors, facing, hp, max, isMe) {
+  bx.save(); bx.translate(x, y);
+  bx.fillStyle = colors[0];
+  bx.beginPath(); bx.moveTo(-w / 2, 0); bx.lineTo(w / 2, 0); bx.lineTo(w / 2 - 14, 26); bx.lineTo(-w / 2 + 14, 26); bx.closePath(); bx.fill();
+  bx.fillStyle = colors[1]; bx.fillRect(-w / 2 + 4, 5, w - 8, 4);
+  bx.fillStyle = '#eee'; bx.fillRect(-18 - facing * 14, -24, 30, 24);
+  bx.fillStyle = '#7fc3f0'; bx.fillRect(-14 - facing * 14, -19, 22, 8);
+  // cannon
+  bx.fillStyle = '#2b2b2b';
+  bx.save(); bx.translate(facing * w * 0.28, -6); bx.rotate(facing > 0 ? -0.35 : Math.PI + 0.35);
+  bx.fillRect(0, -5, 30, 10); bx.restore();
+  bx.beginPath(); bx.arc(facing * w * 0.28, -2, 8, 0, 7); bx.fill();
+  // flag
+  bx.strokeStyle = '#333'; bx.lineWidth = 2;
+  bx.beginPath(); bx.moveTo(-facing * w * 0.3, 0); bx.lineTo(-facing * w * 0.3, -54); bx.stroke();
+  bx.fillStyle = isMe ? '#ffd34d' : colors[0];
+  bx.beginPath(); bx.moveTo(-facing * w * 0.3, -54); bx.lineTo(-facing * w * 0.3 + facing * 24, -48); bx.lineTo(-facing * w * 0.3, -42); bx.fill();
+  // smoke when damaged
+  if (hp / max < 0.5) {
+    for (let i = 0; i < 3; i++) {
+      const s = (battle.t * 0.8 + i / 3) % 1;
+      bx.fillStyle = `rgba(60,60,60,${0.5 * (1 - s)})`;
+      bx.beginPath(); bx.arc(-6 + Math.sin(i + battle.t) * 6, -28 - s * 40, 6 + s * 10, 0, 7); bx.fill();
+    }
+  }
+  bx.restore();
+}
+
+function battleLoop() {
+  if (!battleOpen() || !battle) return;
+  const now = performance.now();
+  const dt = battle.last ? Math.min(0.05, (now - battle.last) / 1000) : 0;
+  battle.last = now;
+  battle.t = (battle.t || 0) + dt;
+  const meX = 95, rX = 365, waterY = 150;
+
+  if (battle.phase === 'fight') {
+    battle.reload = Math.max(0, battle.reload - dt);
+    battle.rTimer -= dt;
+    if (battle.rTimer <= 0) {
+      battle.rTimer = battle.rInterval * rand(0.85, 1.15);
+      battle.balls.push({ from: 'rival', t: 0, dur: 0.8, hit: Math.random() < 0.7, dmg: battle.rDmg, miss: rand(30, 60) });
+    }
+    battle.balls.forEach(b => {
+      b.t += dt;
+      if (b.t >= b.dur && !b.done) {
+        b.done = true;
+        const tx = b.from === 'me' ? rX : meX;
+        if (b.hit) {
+          if (b.from === 'me') battle.rHp = Math.max(0, battle.rHp - b.dmg); else battle.myHp = Math.max(0, battle.myHp - b.dmg);
+          battle.booms.push({ x: tx, y: waterY - 10, t: 0, fire: true });
+          battle.texts.push({ x: tx, y: waterY - 60, t: 0, text: (b.crit ? 'CRIT! ' : '') + `-${b.dmg}`, color: b.from === 'me' ? '#ffe680' : '#ff8f80' });
+        } else {
+          battle.booms.push({ x: tx + (b.from === 'me' ? b.miss : -b.miss), y: waterY + 6, t: 0, fire: false });
+          battle.texts.push({ x: tx, y: waterY - 60, t: 0, text: 'Miss', color: '#ffffff' });
+        }
+      }
+    });
+    battle.balls = battle.balls.filter(b => !b.done);
+    if (battle.rHp <= 0) endBattle(true);
+    else if (battle.myHp <= 0) endBattle(false);
+  }
+
+  // ---- draw ----
+  let g = bx.createLinearGradient(0, 0, 0, waterY);
+  g.addColorStop(0, '#5db6ea'); g.addColorStop(1, '#bfe7fb');
+  bx.fillStyle = g; bx.fillRect(0, 0, BW, waterY);
+  g = bx.createLinearGradient(0, waterY, 0, BH);
+  g.addColorStop(0, '#2f8fd0'); g.addColorStop(1, '#123d6a');
+  bx.fillStyle = g; bx.fillRect(0, waterY, BW, BH - waterY);
+
+  const r = rival || battle.lastRival;
+  if (rival) battle.lastRival = rival;
+  const meHp = battle.myHp ?? hullHP(), meMax = battle.myMax ?? hullHP();
+  const rHp = battle.rHp ?? battle.st.hp, rMax = battle.rMax ?? battle.st.hp;
+  const bob = Math.sin(battle.t * 2) * 2;
+  const myColors = [['#9c6a36', '#6e4420'], ['#b5542f', '#8c3e20'], ['#a9b3ba', '#5c6a75'], ['#f4f4f4', '#2a74c9'], ['#c0392b', '#1d2b3a'], ['#f2f2f2', '#e8742a'], ['#1f2d44', '#f28c28']][tier()];
+  if (!(battle.phase === 'result' && meHp <= 0)) drawBattleBoat(meX, waterY - 18 + bob, 130, myColors, 1, meHp, meMax, true);
+  if (r && !(battle.phase === 'result' && rHp <= 0)) drawBattleBoat(rX, waterY - 18 - bob, 130, r.colors, -1, rHp, rMax, false);
+  // waves in front
+  bx.fillStyle = 'rgba(47,143,208,.6)';
+  bx.beginPath(); bx.moveTo(0, waterY + 12);
+  for (let x = 0; x <= BW; x += 10) bx.lineTo(x, waterY + Math.sin(x * 0.05 + battle.t * 2) * 3);
+  bx.lineTo(BW, waterY + 12); bx.fill();
+
+  // cannonballs
+  (battle.balls || []).forEach(b => {
+    const u = Math.min(1, b.t / b.dur);
+    const x0 = b.from === 'me' ? meX + 50 : rX - 50, x1 = b.from === 'me' ? rX + (b.hit ? 0 : b.miss) : meX - (b.hit ? 0 : b.miss);
+    const x = x0 + (x1 - x0) * u, y = waterY - 30 + (b.hit ? -10 : 30) * u - Math.sin(Math.PI * u) * 75;
+    bx.fillStyle = '#1b1b1b'; bx.beginPath(); bx.arc(x, y, 5, 0, 7); bx.fill();
+  });
+  // explosions and splashes
+  (battle.booms || []).forEach(e => {
+    e.t += dt;
+    const s = e.t / 0.6;
+    if (e.fire) {
+      bx.fillStyle = `rgba(255,170,40,${1 - s})`; bx.beginPath(); bx.arc(e.x, e.y, 10 + s * 26, 0, 7); bx.fill();
+      bx.fillStyle = `rgba(255,240,150,${1 - s})`; bx.beginPath(); bx.arc(e.x, e.y, 5 + s * 12, 0, 7); bx.fill();
+    } else {
+      bx.strokeStyle = `rgba(255,255,255,${1 - s})`; bx.lineWidth = 3;
+      for (let i = -2; i <= 2; i++) { bx.beginPath(); bx.moveTo(e.x + i * 5, e.y); bx.lineTo(e.x + i * 9, e.y - 30 * Math.sin(Math.PI * Math.min(1, s))); bx.stroke(); }
+    }
+  });
+  if (battle.booms) battle.booms = battle.booms.filter(e => e.t < 0.6);
+  bx.font = 'bold 16px sans-serif'; bx.textAlign = 'center';
+  (battle.texts || []).forEach(tx => {
+    tx.t += dt;
+    bx.globalAlpha = Math.max(0, 1 - tx.t);
+    bx.fillStyle = 'rgba(0,0,0,.5)'; bx.fillText(tx.text, tx.x + 1, tx.y - tx.t * 30 + 1);
+    bx.fillStyle = tx.color; bx.fillText(tx.text, tx.x, tx.y - tx.t * 30);
+  });
+  bx.globalAlpha = 1;
+  if (battle.texts) battle.texts = battle.texts.filter(tx => tx.t < 1);
+
+  // health bars
+  const bar = (x, label, hp, max, col) => {
+    bx.fillStyle = 'rgba(0,0,0,.45)'; bx.fillRect(x, 10, 170, 24);
+    bx.fillStyle = col; bx.fillRect(x + 3, 13, 164 * (hp / max), 18);
+    bx.fillStyle = '#fff'; bx.font = 'bold 12px sans-serif'; bx.textAlign = 'center';
+    bx.fillText(`${label}: ${hp}/${max}`, x + 85, 27);
+  };
+  bar(12, 'You', meHp, meMax, '#2e9d52');
+  if (r) bar(BW - 182, r.name, rHp, rMax, '#d2483f');
+
+  // aim meter
+  if (battle.phase === 'fight') {
+    const c = CANNONS[S.cannon], mx = 40, mw = BW - 80, my = 212;
+    bx.fillStyle = 'rgba(0,0,0,.45)'; bx.fillRect(mx, my, mw, 16);
+    bx.fillStyle = '#2e9d52'; bx.fillRect(mx + mw * (0.5 - c.zone / 2), my, mw * c.zone, 16);
+    bx.fillStyle = '#1d6b37'; bx.fillRect(mx + mw * (0.5 - c.zone / 8), my, mw * c.zone / 4, 16);
+    const nx = mx + mw * needlePos();
+    bx.fillStyle = '#fff'; bx.fillRect(nx - 2, my - 6, 4, 28);
+    bx.font = 'bold 12px sans-serif'; bx.textAlign = 'center';
+    bx.fillStyle = '#fff';
+    bx.fillText(battle.reload > 0 ? 'Reloading…' : 'Aim: fire in the green!', BW / 2, my - 8);
+    $('fireBtn').disabled = battle.reload > 0;
+  }
+  requestAnimationFrame(battleLoop);
+}
+
+$('battleGo').onclick = startFight;
+$('battleNo').onclick = closeBattle;
+$('fireBtn').onclick = fire;
+$('battleClose').onclick = closeBattle;
+$('attackBtn').onclick = openBattle;
 
 // ======================================================================
 //  FILLET STATION — drag the knife across the fish.
@@ -1295,11 +1668,14 @@ function nextFilletFish() {
   const item = S.bucket.find(f => !f.filleted);
   if (!item) {
     fillet = { done: true, cuts: [] };
+    $('filletFact').classList.add('hidden');
     $('filletInfo').textContent = '✨ All fish filleted! Take them to the market.';
     $('filletBar').style.width = '100%';
     return;
   }
   fillet = { item, sp: speciesById(item.id), chops: 0, bad: 0, cuts: [], done: false };
+  $('filletFact').innerHTML = `<b>🐟 Did you know?</b> ${fillet.sp.fact}`;
+  $('filletFact').classList.remove('hidden');
   const k = G().knife;
   const raw = S.bucket.filter(f => !f.filleted).length;
   $('filletInfo').textContent = `${fillet.sp.name}: ${k.chops} cut${k.chops > 1 ? 's' : ''}, cut it ${speedWord(fillet.sp)} (${raw} fish left)`;

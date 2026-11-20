@@ -59,11 +59,11 @@
     <div class="spacer"></div>
     <button id="reelBtn" class="btn yellow hidden">Reel in 🎣</button>
     <button id="filletBtn" class="btn red hidden">Fillet fish 🔪</button>
+    <button id="attackBtn" class="btn dark hidden">Attack 💣</button>
     <button id="dockBtn" class="btn blue">Back to dock ⚓</button>
   </div>
   <div class="stage">
     <canvas id="game" width="960" height="760"></canvas>
-    <div class="fact" id="fact"><b id="factTitle">🐟 Fish fact</b><span id="factText"></span></div>
     <div class="walk-pad">
       <button class="walk" id="walkL">◀</button>
       <button class="walk" id="walkR">▶</button>
@@ -79,9 +79,29 @@
     <p class="muted" id="filletSub">Drag the knife across the fish. Cuts in the <b style="color:#2e9d52">green zone</b> are clean. Too fast or too slow and the fish bleeds, so it's worth less!</p>
     <canvas id="filletCanvas" width="420" height="250"></canvas>
     <div id="filletInfo" class="fillet-info"></div>
+    <p id="filletFact" class="fillet-fact hidden"></p>
     <div class="progress"><div id="filletBar"></div></div>
     <div class="row">
       <button id="filletClose" class="btn ghost huge">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CANNON BATTLE ============ -->
+<div id="battle" class="overlay hidden">
+  <div class="panel battle-panel">
+    <h2 id="battleTitle">⚔️ Cannon Battle</h2>
+    <p class="muted" id="battleSub"></p>
+    <canvas id="battleCanvas" width="460" height="250"></canvas>
+    <div class="row" id="battleStart">
+      <button id="battleGo" class="btn red huge">Attack! 💣</button>
+      <button id="battleNo" class="btn ghost">Sail away</button>
+    </div>
+    <div class="row hidden" id="battleFight">
+      <button id="fireBtn" class="btn red huge">FIRE! 💥</button>
+    </div>
+    <div class="row hidden" id="battleEnd">
+      <button id="battleClose" class="btn blue huge">Back to fishing</button>
     </div>
   </div>
 </div>
