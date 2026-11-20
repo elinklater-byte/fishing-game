@@ -4,10 +4,11 @@
 //
 //   GET  /api/leaderboard  -> { players: [{ name, earned, caught, env, trophies, updated }] }
 //   POST /api/leaderboard  <- { name, key, earned, caught, env: { ocean, arctic, swamp }, trophies: [...] }
+//   DELETE /api/leaderboard <- { name, key }   (removes your own entry)
 //
 // `key` is a random secret the game makes once per device. It claims the username,
 // so nobody else can post scores under your name.
-import { put, get, list } from '@vercel/blob';
+import { put, get, list, del } from '@vercel/blob';
 import { createHash } from 'node:crypto';
 
 const PREFIX = 'players/';
@@ -85,5 +86,24 @@ export async function POST(request) {
   } catch (err) {
     console.error('leaderboard POST failed', err);
     return json({ error: 'Could not save your score right now.' }, 500);
+  }
+}
+
+export async function DELETE(request) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Bad request.' }, 400); }
+  const name = String(body.name || '').trim().replace(/\s+/g, ' ');
+  const key = String(body.key || '');
+  if (!NAME_RE.test(name) || key.length < 16) return json({ error: 'Bad request.' }, 400);
+  try {
+    const pathname = `${PREFIX}${idFor(name)}.json`;
+    const existing = await readPlayer(pathname).catch(() => null);
+    if (!existing) return json({ ok: true });
+    if (existing.keyHash !== sha(key)) return json({ error: 'That is not your username.' }, 403);
+    await del(pathname);
+    return json({ ok: true });
+  } catch (err) {
+    console.error('leaderboard DELETE failed', err);
+    return json({ error: 'Could not remove your entry right now.' }, 500);
   }
 }
